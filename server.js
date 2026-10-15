@@ -38,7 +38,7 @@ function loadAds() {
   try {
     const raw = fs.readFileSync(DB_FILE, 'utf-8');
     const data = JSON.parse(raw);
-    return Array.isArray(data.ads) ? data.ads : [];
+    return Array.isArray(data) ? data : (Array.isArray(data.ads) ? data.ads : []);
   } catch (err) {
     console.error('Error reading ads database:', err);
     return [];
@@ -454,7 +454,13 @@ app.get('/api/v1/ads', verifyAdSecretKey, (req, res) => {
 
   const formatted = activeAds.map((a) => formatAdPayload(a, baseUrl));
 
-  res.setHeader('Cache-Control', 'public, max-age=30, stale-while-revalidate=120');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Surrogate-Control', 'no-store');
+  res.setHeader('CDN-Cache-Control', 'no-store');
+  res.setHeader('Cloudflare-CDN-Cache-Control', 'no-store');
+
   return res.status(200).json({
     status: 'success',
     count: formatted.length,
@@ -462,10 +468,10 @@ app.get('/api/v1/ads', verifyAdSecretKey, (req, res) => {
   });
 });
 
-// 2. GET RANDOM ACTIVE AD (Optional filters: aspect_ratio, placement, media_type)
+// 2. GET RANDOM ACTIVE AD (Optional filters: aspect_ratio, placement, media_type, exclude_id)
 app.get('/api/v1/ads/random', verifyAdSecretKey, (req, res) => {
   const ads = loadAds();
-  const { aspect_ratio, format, placement, media_type } = req.query || {};
+  const { aspect_ratio, format, placement, media_type, exclude_id, last_id, exclude } = req.query || {};
 
   let activeAds = ads.filter((a) => a.is_active);
 
@@ -500,13 +506,29 @@ app.get('/api/v1/ads/random', verifyAdSecretKey, (req, res) => {
   }
 
   if (activeAds.length === 0) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
     return res.status(404).json({ status: 'empty', message: 'No active ads currently available.' });
   }
 
-  const randomAd = activeAds[Math.floor(Math.random() * activeAds.length)];
+  const excluded = String(exclude_id || last_id || exclude || '').trim();
+  let pool = activeAds;
+  if (excluded && pool.length > 1) {
+    const candidatePool = pool.filter((a) => a.id !== excluded);
+    if (candidatePool.length > 0) {
+      pool = candidatePool;
+    }
+  }
+
+  const randomAd = pool[Math.floor(Math.random() * pool.length)];
   const baseUrl = getEffectiveBaseUrl(req);
 
-  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Surrogate-Control', 'no-store');
+  res.setHeader('CDN-Cache-Control', 'no-store');
+  res.setHeader('Cloudflare-CDN-Cache-Control', 'no-store');
+
   return res.status(200).json({
     status: 'success',
     ad: formatAdPayload(randomAd, baseUrl),
