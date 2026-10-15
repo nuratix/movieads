@@ -243,8 +243,8 @@
       <div id="tabContentCreate" class="tab-content">
         <div class="create-card">
           <div class="section-header-box">
-            <h3>Upload New 16:9 Ad Poster</h3>
-            <p>Upload a standard 16:9 widescreen poster image (e.g. 1920x1080 or 1280x720) and set its destination.</p>
+            <h3>Create New Ad Campaign</h3>
+            <p>Upload 16:9 Player Banners &amp; Videos, or 9:16 Shorts Posters &amp; Video Ads for Movieflix.</p>
           </div>
 
           <form id="createAdForm" class="create-form">
@@ -260,14 +260,30 @@
               </div>
             </div>
 
-            <!-- 16:9 Poster Upload Box -->
+            <!-- Format & Aspect Ratio Selector -->
             <div class="input-group">
-              <label>16:9 Ad Poster Banner <span class="req">*</span></label>
+              <label>Ad Format &amp; Aspect Ratio <span class="req">*</span></label>
+              <div class="format-toggle-group">
+                <button type="button" id="formatBtn169" class="format-toggle-btn active" onclick="selectFormat('16:9', 'player')">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"></rect><polygon points="10 9 15 12 10 15 10 9" fill="currentColor"></polygon></svg>
+                  <span>16:9 Landscape (Player &amp; Web)</span>
+                </button>
+                <button type="button" id="formatBtn916" class="format-toggle-btn" onclick="selectFormat('9:16', 'shorts')">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"></rect><polygon points="10 9 15 12 10 15 10 9" fill="currentColor"></polygon></svg>
+                  <span>9:16 Vertical (Movieflix Shorts)</span>
+                </button>
+              </div>
+              <input type="hidden" id="adAspectRatio" name="aspect_ratio" value="16:9">
+            </div>
+
+            <!-- Media Upload Box (Images & Videos) -->
+            <div class="input-group">
+              <label id="uploadFieldLabel">Ad Media File (16:9 Video or Image Poster) <span class="req">*</span></label>
 
               <div id="uploadDropZone" class="poster-drop-zone">
-                <input type="file" id="posterFileInput" name="poster_file" accept="image/png,image/jpeg,image/webp,image/gif" class="file-hidden-input">
+                <input type="file" id="mediaFileInput" name="media_file" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime" class="file-hidden-input">
 
-                <!-- 16:9 Preview Frame -->
+                <!-- Dynamic Aspect Ratio Preview Frame -->
                 <div id="aspectRatioFrame" class="aspect-16-9-frame">
                   <div id="dropPrompt" class="drop-prompt">
                     <div class="upload-cloud-icon">
@@ -278,18 +294,19 @@
                       </svg>
                     </div>
                     <div class="upload-text-content">
-                      <p class="drop-title">Tap to browse or drop 16:9 poster image</p>
-                      <p class="drop-sub">Recommended: 1920x1080, 1280x720 &bull; Max 15MB</p>
+                      <p id="dropTitle" class="drop-title">Tap to browse or drop ad image or video</p>
+                      <p id="dropSub" class="drop-sub">Supported: MP4, WebM, PNG, JPG, WEBP &bull; Max 100MB</p>
                     </div>
-                    <span class="aspect-ratio-pill">16:9 Aspect Ratio</span>
+                    <span id="aspectBadgeText" class="aspect-ratio-pill">16:9 Aspect Ratio</span>
                   </div>
 
-                  <!-- Live Image Preview inside 16:9 frame -->
+                  <!-- Live Media Preview -->
                   <div id="previewContainer" class="preview-container hidden">
-                    <img id="livePreviewImg" src="" alt="16:9 Preview" class="live-preview-img">
+                    <img id="livePreviewImg" src="" alt="Preview" class="live-preview-media hidden">
+                    <video id="livePreviewVid" src="" class="live-preview-media hidden" controls autoplay muted loop playsinline></video>
                     <div class="preview-overlay">
-                      <span id="previewMetaBadge" class="badge-16-9">16:9 Preview Active</span>
-                      <button type="button" id="clearImageBtn" class="btn btn-outline btn-xs btn-danger">Change Image</button>
+                      <span id="previewMetaBadge" class="badge-16-9">Preview Active</span>
+                      <button type="button" id="clearImageBtn" class="btn btn-outline btn-xs btn-danger">Change Media</button>
                     </div>
                   </div>
                 </div>
@@ -297,7 +314,7 @@
 
               <!-- Or Paste URL Option -->
               <div class="or-separator">
-                <span>OR PASTE IMAGE URL</span>
+                <span>OR PASTE REMOTE MEDIA URL</span>
               </div>
               <div class="input-field-wrap">
                 <svg class="field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -305,7 +322,7 @@
                   <line x1="2" y1="12" x2="22" y2="12"></line>
                   <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
                 </svg>
-                <input type="url" id="posterUrlInput" name="poster_url" placeholder="https://cdn.example.com/banner-1920x1080.jpg">
+                <input type="url" id="mediaUrlInput" name="media_url" placeholder="https://cdn.example.com/ad-video.mp4 or poster.jpg">
               </div>
             </div>
 
@@ -318,12 +335,21 @@
               </label>
 
               <div class="placement-select-wrap">
-                <label for="adPlacement">Placement Tag:</label>
+                <label for="adPlacement">Placement Target:</label>
                 <select id="adPlacement" name="placement" class="select-input">
-                  <option value="all">All Placements (Banner + Modal)</option>
-                  <option value="home_banner">Home Banner</option>
-                  <option value="interstitial">Interstitial Pop-Up</option>
-                  <option value="player_overlay">Video Player Overlay</option>
+                  <option value="player">Movie Player (16:9 Video &amp; Banner)</option>
+                  <option value="shorts">Movieflix Shorts (9:16 Video &amp; Poster)</option>
+                  <option value="all">All Placements</option>
+                </select>
+              </div>
+
+              <div class="placement-select-wrap">
+                <label for="adSkipSeconds">Skip Countdown (sec):</label>
+                <select id="adSkipSeconds" name="skip_seconds" class="select-input">
+                  <option value="10">10 Seconds (Standard Player)</option>
+                  <option value="5">5 Seconds (Shorts &amp; Midroll)</option>
+                  <option value="15">15 Seconds</option>
+                  <option value="0">Instant Skip</option>
                 </select>
               </div>
             </div>

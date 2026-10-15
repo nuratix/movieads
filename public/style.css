@@ -815,6 +815,44 @@ body {
   z-index: 10;
 }
 
+/* Format & Aspect Ratio Toggle Group */
+.format-toggle-group {
+  display: flex;
+  gap: 12px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.format-toggle-btn {
+  flex: 1;
+  min-width: 180px;
+  padding: 12px 16px;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: all 0.2s ease;
+}
+
+.format-toggle-btn:hover {
+  border-color: #555566;
+  color: #ffffff;
+}
+
+.format-toggle-btn.active {
+  background: rgba(229, 9, 20, 0.12);
+  border-color: var(--brand-red);
+  color: #ffffff;
+  box-shadow: 0 0 16px rgba(229, 9, 20, 0.25);
+}
+
 /* 16:9 Aspect Frame */
 .aspect-16-9-frame {
   width: 100%;
@@ -826,6 +864,31 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: all 0.25s ease;
+}
+
+/* 9:16 Aspect Frame (Shorts & Vertical) */
+.aspect-9-16-frame {
+  width: 240px;
+  max-width: 85%;
+  aspect-ratio: 9 / 16;
+  border-radius: var(--radius-md);
+  position: relative;
+  overflow: hidden;
+  background: #131318;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  transition: all 0.25s ease;
+}
+
+.live-preview-media {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .drop-prompt {

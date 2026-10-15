@@ -51,29 +51,39 @@ function saveAds(ads) {
   fs.renameSync(tmpFile, DB_FILE);
 }
 
-// ─── Multer 16:9 Image Upload Setup ──────────────────────────────────────────
+// ─── Multer Setup: 16:9 & 9:16 Images and Videos (up to 100MB) ───────────────
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
     cb(null, UPLOADS_DIR);
   },
   filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
-    const cleanName = `ad_16_9_${Date.now()}_${Math.random().toString(36).substring(2, 8)}${ext}`;
+    const ext = path.extname(file.originalname).toLowerCase() || '.bin';
+    const isVid = /mp4|webm|mov|mkv|ogg/.test(ext) || (file.mimetype && file.mimetype.startsWith('video/'));
+    const prefix = isVid ? 'ad_vid_' : 'ad_img_';
+    const cleanName = `${prefix}${Date.now()}_${Math.random().toString(36).substring(2, 8)}${ext}`;
     cb(null, cleanName);
   },
 });
 
 const upload = multer({
   storage,
-  limits: { fileSize: 15 * 1024 * 1024 }, // 15MB max
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB max for video ads
   fileFilter: (_req, file, cb) => {
-    const allowed = /jpeg|jpg|png|webp|gif/;
-    const mime = file.mimetype.toLowerCase();
+    const allowedImages = /jpeg|jpg|png|webp|gif/;
+    const allowedVideos = /mp4|webm|mov|mkv|ogg|quicktime/;
+    const mime = (file.mimetype || '').toLowerCase();
     const ext = path.extname(file.originalname).toLowerCase().replace('.', '');
-    if (allowed.test(mime) || allowed.test(ext)) {
+    if (
+      allowedImages.test(mime) ||
+      allowedImages.test(ext) ||
+      allowedVideos.test(mime) ||
+      allowedVideos.test(ext) ||
+      mime.startsWith('image/') ||
+      mime.startsWith('video/')
+    ) {
       cb(null, true);
     } else {
-      cb(new Error('Only image files (JPEG, PNG, WEBP, GIF) are allowed for 16:9 ad banners.'));
+      cb(new Error('Only images (JPEG, PNG, WEBP, GIF) and videos (MP4, WebM, MOV) are allowed.'));
     }
   },
 });
@@ -110,13 +120,13 @@ function requireAdmin(req, res, next) {
       req.admin = decoded;
       return next();
     }
-    return res.status(401).json({ error: 'Unauthorized: Invalid credentials' });
+    return res.status(403).json({ error: 'Forbidden: Insufficient privileges' });
   } catch (err) {
-    return res.status(401).json({ error: 'Session expired or invalid. Please log in again.' });
+    return res.status(401).json({ error: 'Session expired or invalid token' });
   }
 }
 
-// ─── Secret Key Ad API Middleware ────────────────────────────────────────────
+// ─── Ad API Key Verification Middleware ──────────────────────────────────────
 function verifyAdSecretKey(req, res, next) {
   const provided = (
     req.headers['x-ad-secret-key'] ||
@@ -134,6 +144,35 @@ function verifyAdSecretKey(req, res, next) {
     });
   }
   next();
+}
+
+// ─── Helper: Format Enriched Ad Payload ──────────────────────────────────────
+function formatAdPayload(a, baseUrl) {
+  const posterUrl = a.poster_url
+    ? (a.poster_url.startsWith('http') ? a.poster_url : `${baseUrl}${a.poster_url}`)
+    : '';
+  const videoUrl = a.video_url
+    ? (a.video_url.startsWith('http') ? a.video_url : `${baseUrl}${a.video_url}`)
+    : '';
+
+  return {
+    id: a.id,
+    name: a.name,
+    media_type: a.media_type || (videoUrl ? 'video' : 'image'),
+    aspect_ratio: a.aspect_ratio || '16:9',
+    poster_url: posterUrl,
+    video_url: videoUrl,
+    target_url: a.target_url,
+    click_url: `${baseUrl}/api/v1/click/${a.id}`,
+    impression_url: `${baseUrl}/api/v1/impression/${a.id}`,
+    placement: a.placement || 'all',
+    skip_seconds: a.skip_seconds || 10,
+    created_at: a.created_at,
+    updated_at: a.updated_at,
+    is_active: a.is_active,
+    impressions: a.impressions || 0,
+    clicks: a.clicks || 0,
+  };
 }
 
 // ─── Auth Endpoints ──────────────────────────────────────────────────────────
@@ -180,11 +219,8 @@ app.get('/api/auth/me', (req, res) => {
   if (!token) return res.status(401).json({ authenticated: false });
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    if (decoded && decoded.role === 'admin') {
-      return res.status(200).json({ authenticated: true, key: decoded.key });
-    }
-    return res.status(401).json({ authenticated: false });
-  } catch {
+    return res.status(200).json({ authenticated: true, key: decoded.key });
+  } catch (_) {
     return res.status(401).json({ authenticated: false });
   }
 });
@@ -193,25 +229,47 @@ app.get('/api/auth/me', (req, res) => {
 app.get('/api/ads', requireAdmin, (req, res) => {
   const ads = loadAds();
   const baseUrl = getEffectiveBaseUrl(req);
-  const enriched = ads.map((ad) => ({
-    ...ad,
-    full_poster_url: ad.poster_url.startsWith('http') ? ad.poster_url : `${baseUrl}${ad.poster_url}`,
-    click_url: `${baseUrl}/api/v1/click/${ad.id}`,
-  }));
+  const enriched = ads.map((ad) => formatAdPayload(ad, baseUrl));
   return res.status(200).json({ success: true, count: enriched.length, ads: enriched });
 });
 
-app.post('/api/ads', requireAdmin, upload.single('poster_file'), (req, res) => {
+app.post('/api/ads', requireAdmin, upload.any(), (req, res) => {
   try {
-    const { name, target_url, poster_url, is_active, placement } = req.body || {};
+    const {
+      name,
+      target_url,
+      poster_url,
+      video_url,
+      aspect_ratio,
+      media_type,
+      placement,
+      is_active,
+      skip_seconds,
+    } = req.body || {};
+
     const cleanName = String(name || '').trim();
     const cleanTarget = String(target_url || '').trim();
-    let finalPosterUrl = '';
+    const ratio = aspect_ratio === '9:16' ? '9:16' : '16:9';
 
-    if (req.file) {
-      finalPosterUrl = `/uploads/${req.file.filename}`;
-    } else if (poster_url && String(poster_url).trim().startsWith('http')) {
-      finalPosterUrl = String(poster_url).trim();
+    const files = req.files || [];
+    let finalPosterUrl = (poster_url || '').trim();
+    let finalVideoUrl = (video_url || '').trim();
+    let detectedType = (media_type || '').toLowerCase();
+
+    for (const file of files) {
+      const isVid = (file.mimetype && file.mimetype.startsWith('video/')) || /mp4|webm|mov|mkv|ogg/.test(file.filename);
+      if (isVid) {
+        finalVideoUrl = `/uploads/${file.filename}`;
+        detectedType = 'video';
+      } else {
+        finalPosterUrl = `/uploads/${file.filename}`;
+        if (!detectedType) detectedType = 'image';
+      }
+    }
+
+    if (!detectedType) {
+      if (finalVideoUrl) detectedType = 'video';
+      else detectedType = 'image';
     }
 
     if (!cleanName) {
@@ -220,8 +278,13 @@ app.post('/api/ads', requireAdmin, upload.single('poster_file'), (req, res) => {
     if (!cleanTarget) {
       return res.status(400).json({ error: 'Target destination URL is required.' });
     }
-    if (!finalPosterUrl) {
-      return res.status(400).json({ error: 'Please upload a 16:9 ad poster image or provide an image URL.' });
+    if (!finalPosterUrl && !finalVideoUrl) {
+      return res.status(400).json({ error: 'Please upload an image/video file or provide a media URL.' });
+    }
+
+    let finalPlacement = (placement || '').trim().toLowerCase();
+    if (!finalPlacement || finalPlacement === 'auto') {
+      finalPlacement = ratio === '9:16' ? 'shorts' : 'player';
     }
 
     const ads = loadAds();
@@ -231,8 +294,11 @@ app.post('/api/ads', requireAdmin, upload.single('poster_file'), (req, res) => {
       name: cleanName,
       target_url: cleanTarget,
       poster_url: finalPosterUrl,
-      aspect_ratio: '16:9',
-      placement: (placement || 'all').trim(),
+      video_url: finalVideoUrl,
+      media_type: detectedType,
+      aspect_ratio: ratio,
+      placement: finalPlacement,
+      skip_seconds: Number(skip_seconds) || (ratio === '9:16' ? 5 : 10),
       is_active: is_active === 'true' || is_active === true || is_active === 1 || is_active === '1',
       impressions: 0,
       clicks: 0,
@@ -247,11 +313,7 @@ app.post('/api/ads', requireAdmin, upload.single('poster_file'), (req, res) => {
     return res.status(201).json({
       success: true,
       message: 'Ad campaign created and published successfully.',
-      ad: {
-        ...newAd,
-        full_poster_url: newAd.poster_url.startsWith('http') ? newAd.poster_url : `${baseUrl}${newAd.poster_url}`,
-        click_url: `${baseUrl}/api/v1/click/${newAd.id}`,
-      },
+      ad: formatAdPayload(newAd, baseUrl),
     });
   } catch (err) {
     console.error('Error creating ad:', err);
@@ -278,23 +340,59 @@ app.patch('/api/ads/:id/toggle', requireAdmin, (req, res) => {
   });
 });
 
-app.put('/api/ads/:id', requireAdmin, (req, res) => {
+app.put('/api/ads/:id', requireAdmin, upload.any(), (req, res) => {
   const { id } = req.params;
-  const { name, target_url, is_active, placement } = req.body || {};
+  const {
+    name,
+    target_url,
+    poster_url,
+    video_url,
+    aspect_ratio,
+    media_type,
+    is_active,
+    placement,
+    skip_seconds,
+  } = req.body || {};
+
   const ads = loadAds();
   const ad = ads.find((a) => a.id === id);
   if (!ad) {
     return res.status(404).json({ error: 'Ad not found.' });
   }
 
+  const files = req.files || [];
+  for (const file of files) {
+    const isVid = (file.mimetype && file.mimetype.startsWith('video/')) || /mp4|webm|mov|mkv|ogg/.test(file.filename);
+    if (isVid) {
+      ad.video_url = `/uploads/${file.filename}`;
+      ad.media_type = 'video';
+    } else {
+      ad.poster_url = `/uploads/${file.filename}`;
+      if (!ad.media_type) ad.media_type = 'image';
+    }
+  }
+
   if (name) ad.name = String(name).trim();
   if (target_url) ad.target_url = String(target_url).trim();
+  if (poster_url !== undefined) ad.poster_url = String(poster_url).trim();
+  if (video_url !== undefined) {
+    ad.video_url = String(video_url).trim();
+    if (ad.video_url) ad.media_type = 'video';
+  }
+  if (aspect_ratio) ad.aspect_ratio = aspect_ratio === '9:16' ? '9:16' : '16:9';
+  if (media_type) ad.media_type = media_type;
   if (is_active !== undefined) ad.is_active = Boolean(is_active);
   if (placement) ad.placement = String(placement).trim();
+  if (skip_seconds) ad.skip_seconds = Number(skip_seconds);
   ad.updated_at = new Date().toISOString();
 
   saveAds(ads);
-  return res.status(200).json({ success: true, message: 'Ad updated successfully.', ad });
+  const baseUrl = getEffectiveBaseUrl(req);
+  return res.status(200).json({
+    success: true,
+    message: 'Ad updated successfully.',
+    ad: formatAdPayload(ad, baseUrl),
+  });
 });
 
 app.delete('/api/ads/:id', requireAdmin, (req, res) => {
@@ -308,14 +406,16 @@ app.delete('/api/ads/:id', requireAdmin, (req, res) => {
   const [removed] = ads.splice(index, 1);
   saveAds(ads);
 
-  // Clean up uploaded file if local
-  if (removed && removed.poster_url && removed.poster_url.startsWith('/uploads/')) {
-    const filename = removed.poster_url.replace('/uploads/', '');
-    const filePath = path.join(UPLOADS_DIR, filename);
-    if (fs.existsSync(filePath)) {
-      try {
-        fs.unlinkSync(filePath);
-      } catch (_) {}
+  // Clean up uploaded files if local
+  for (const field of ['poster_url', 'video_url']) {
+    if (removed && removed[field] && removed[field].startsWith('/uploads/')) {
+      const filename = removed[field].replace('/uploads/', '');
+      const filePath = path.join(UPLOADS_DIR, filename);
+      if (fs.existsSync(filePath)) {
+        try {
+          fs.unlinkSync(filePath);
+        } catch (_) {}
+      }
     }
   }
 
@@ -323,36 +423,82 @@ app.delete('/api/ads/:id', requireAdmin, (req, res) => {
 });
 
 // ─── Public Ad Serving API (Protected by ADS_SECRET_KEY) ─────────────────────
-// 1. GET ALL ACTIVE ADS (Returns active 16:9 ads for client site/app)
+// 1. GET ALL ACTIVE ADS (Optional filters: aspect_ratio, placement, media_type)
 app.get('/api/v1/ads', verifyAdSecretKey, (req, res) => {
   const ads = loadAds();
   const baseUrl = getEffectiveBaseUrl(req);
-  const activeAds = ads
-    .filter((a) => a.is_active)
-    .map((a) => ({
-      id: a.id,
-      name: a.name,
-      aspect_ratio: a.aspect_ratio || '16:9',
-      poster_url: a.poster_url.startsWith('http') ? a.poster_url : `${baseUrl}${a.poster_url}`,
-      target_url: a.target_url,
-      click_url: `${baseUrl}/api/v1/click/${a.id}`,
-      impression_url: `${baseUrl}/api/v1/impression/${a.id}`,
-      placement: a.placement || 'all',
-      created_at: a.created_at,
-    }));
+  const { aspect_ratio, format, placement, media_type } = req.query || {};
 
-  res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+  let activeAds = ads.filter((a) => a.is_active);
+
+  const targetRatio = (aspect_ratio || format || '').trim();
+  if (targetRatio) {
+    activeAds = activeAds.filter((a) => (a.aspect_ratio || '16:9') === targetRatio);
+  }
+
+  const targetPlacement = (placement || '').trim().toLowerCase();
+  if (targetPlacement && targetPlacement !== 'all') {
+    activeAds = activeAds.filter((a) => {
+      const p = (a.placement || 'all').toLowerCase();
+      return p === 'all' || p === targetPlacement;
+    });
+  }
+
+  const targetType = (media_type || '').trim().toLowerCase();
+  if (targetType) {
+    activeAds = activeAds.filter((a) => {
+      const t = (a.media_type || (a.video_url ? 'video' : 'image')).toLowerCase();
+      return t === targetType;
+    });
+  }
+
+  const formatted = activeAds.map((a) => formatAdPayload(a, baseUrl));
+
+  res.setHeader('Cache-Control', 'public, max-age=30, stale-while-revalidate=120');
   return res.status(200).json({
     status: 'success',
-    count: activeAds.length,
-    ads: activeAds,
+    count: formatted.length,
+    ads: formatted,
   });
 });
 
-// 2. GET RANDOM ACTIVE AD
+// 2. GET RANDOM ACTIVE AD (Optional filters: aspect_ratio, placement, media_type)
 app.get('/api/v1/ads/random', verifyAdSecretKey, (req, res) => {
   const ads = loadAds();
-  const activeAds = ads.filter((a) => a.is_active);
+  const { aspect_ratio, format, placement, media_type } = req.query || {};
+
+  let activeAds = ads.filter((a) => a.is_active);
+
+  const targetRatio = (aspect_ratio || format || '').trim();
+  if (targetRatio) {
+    activeAds = activeAds.filter((a) => (a.aspect_ratio || '16:9') === targetRatio);
+  }
+
+  const targetPlacement = (placement || '').trim().toLowerCase();
+  if (targetPlacement && targetPlacement !== 'all') {
+    activeAds = activeAds.filter((a) => {
+      const p = (a.placement || 'all').toLowerCase();
+      return p === 'all' || p === targetPlacement;
+    });
+  }
+
+  const targetType = (media_type || '').trim().toLowerCase();
+  if (targetType) {
+    activeAds = activeAds.filter((a) => {
+      const t = (a.media_type || (a.video_url ? 'video' : 'image')).toLowerCase();
+      return t === targetType;
+    });
+  }
+
+  // Fallback: if no ad matches specific placement, try any active ad with that aspect ratio
+  if (activeAds.length === 0 && targetRatio) {
+    activeAds = ads.filter((a) => a.is_active && (a.aspect_ratio || '16:9') === targetRatio);
+  }
+  // Ultimate fallback: any active ad
+  if (activeAds.length === 0) {
+    activeAds = ads.filter((a) => a.is_active);
+  }
+
   if (activeAds.length === 0) {
     return res.status(404).json({ status: 'empty', message: 'No active ads currently available.' });
   }
@@ -363,16 +509,7 @@ app.get('/api/v1/ads/random', verifyAdSecretKey, (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   return res.status(200).json({
     status: 'success',
-    ad: {
-      id: randomAd.id,
-      name: randomAd.name,
-      aspect_ratio: randomAd.aspect_ratio || '16:9',
-      poster_url: randomAd.poster_url.startsWith('http') ? randomAd.poster_url : `${baseUrl}${randomAd.poster_url}`,
-      target_url: randomAd.target_url,
-      click_url: `${baseUrl}/api/v1/click/${randomAd.id}`,
-      impression_url: `${baseUrl}/api/v1/impression/${randomAd.id}`,
-      placement: randomAd.placement || 'all',
-    },
+    ad: formatAdPayload(randomAd, baseUrl),
   });
 });
 
@@ -412,18 +549,20 @@ app.get('/api/v1/status', (_req, res) => {
     status: 'online',
     service: 'movieads',
     active_campaigns: activeCount,
+    supported_formats: ['16:9 Image', '16:9 Video', '9:16 Image', '9:16 Video'],
     timestamp: new Date().toISOString(),
   });
 });
 
-// SPA Fallback: serve index.html for unknown routes
+// ─── SPA Fallback ────────────────────────────────────────────────────────────
 app.get('*', (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Start Express server
+// ─── Start Server ────────────────────────────────────────────────────────────
 app.listen(PORT, HOST, () => {
   console.log(`[MovieAds] Server listening on http://${HOST}:${PORT}`);
-  console.log(`[MovieAds] Admin Key: configured in env (length: ${ADMIN_KEY.length})`);
-  console.log(`[MovieAds] Secret Ad Key: configured in env (length: ${ADS_SECRET_KEY.length})`);
+  console.log(`[MovieAds] Admin Key: ${ADMIN_KEY ? 'configured in env' : 'MISSING'}`);
+  console.log(`[MovieAds] Secret Ad Key: ${ADS_SECRET_KEY ? 'configured in env' : 'MISSING'}`);
+  console.log(`[MovieAds] Formats Supported: 16:9 Video/Poster & 9:16 Shorts Video/Poster`);
 });

@@ -13,16 +13,23 @@ const adminPasswordInput = document.getElementById('adminPassword');
 // Form & Upload Elements
 const createAdForm = document.getElementById('createAdForm');
 const uploadDropZone = document.getElementById('uploadDropZone');
-const posterFileInput = document.getElementById('posterFileInput');
-const posterUrlInput = document.getElementById('posterUrlInput');
+const mediaFileInput = document.getElementById('mediaFileInput') || document.getElementById('posterFileInput');
+const mediaUrlInput = document.getElementById('mediaUrlInput') || document.getElementById('posterUrlInput');
 const dropPrompt = document.getElementById('dropPrompt');
 const previewContainer = document.getElementById('previewContainer');
 const livePreviewImg = document.getElementById('livePreviewImg');
+const livePreviewVid = document.getElementById('livePreviewVid');
 const clearImageBtn = document.getElementById('clearImageBtn');
 const previewMetaBadge = document.getElementById('previewMetaBadge');
 const submitAdBtn = document.getElementById('submitAdBtn');
 const createError = document.getElementById('createError');
 const createSuccess = document.getElementById('createSuccess');
+const aspectRatioFrame = document.getElementById('aspectRatioFrame');
+const adAspectRatio = document.getElementById('adAspectRatio');
+const adPlacement = document.getElementById('adPlacement');
+const aspectBadgeText = document.getElementById('aspectBadgeText');
+const uploadFieldLabel = document.getElementById('uploadFieldLabel');
+const dropTitle = document.getElementById('dropTitle');
 
 // Stats & List Elements
 const adsListContainer = document.getElementById('adsListContainer');
@@ -43,6 +50,42 @@ function showToast(message, duration = 3000) {
     toastEl.classList.add('hidden');
   }, duration);
 }
+
+// ─── Format & Aspect Ratio Selector (16:9 vs 9:16) ───────────────────────────
+window.selectFormat = function(ratio, defaultPlacement) {
+  const btn169 = document.getElementById('formatBtn169');
+  const btn916 = document.getElementById('formatBtn916');
+
+  if (ratio === '9:16') {
+    if (btn169) btn169.classList.remove('active');
+    if (btn916) btn916.classList.add('active');
+    if (adAspectRatio) adAspectRatio.value = '9:16';
+    if (aspectRatioFrame) {
+      aspectRatioFrame.classList.remove('aspect-16-9-frame');
+      aspectRatioFrame.classList.add('aspect-9-16-frame');
+    }
+    if (aspectBadgeText) aspectBadgeText.textContent = '9:16 Shorts Ratio';
+    if (uploadFieldLabel) uploadFieldLabel.textContent = 'Ad Media File (9:16 Shorts Video or Vertical Poster) *';
+    if (dropTitle) dropTitle.textContent = 'Tap to browse or drop 9:16 video or poster';
+    if (adPlacement) adPlacement.value = defaultPlacement || 'shorts';
+    const skipSelect = document.getElementById('adSkipSeconds');
+    if (skipSelect) skipSelect.value = '5';
+  } else {
+    if (btn169) btn169.classList.add('active');
+    if (btn916) btn916.classList.remove('active');
+    if (adAspectRatio) adAspectRatio.value = '16:9';
+    if (aspectRatioFrame) {
+      aspectRatioFrame.classList.remove('aspect-9-16-frame');
+      aspectRatioFrame.classList.add('aspect-16-9-frame');
+    }
+    if (aspectBadgeText) aspectBadgeText.textContent = '16:9 Aspect Ratio';
+    if (uploadFieldLabel) uploadFieldLabel.textContent = 'Ad Media File (16:9 Video or Widescreen Poster) *';
+    if (dropTitle) dropTitle.textContent = 'Tap to browse or drop 16:9 video or poster';
+    if (adPlacement) adPlacement.value = defaultPlacement || 'player';
+    const skipSelect = document.getElementById('adSkipSeconds');
+    if (skipSelect) skipSelect.value = '10';
+  }
+};
 
 // ─── Password Visibility Toggle ──────────────────────────────────────────────
 if (togglePasswordBtn && adminPasswordInput) {
@@ -98,17 +141,15 @@ async function checkAuth() {
   }
 }
 
-function showLogin() {
-  loginSection.classList.remove('hidden');
-  dashboardSection.classList.add('hidden');
-  logoutBtn.classList.add('hidden');
+function showDashboard() {
+  if (loginSection) loginSection.classList.add('hidden');
+  if (dashboardSection) dashboardSection.classList.remove('hidden');
+  loadAds();
 }
 
-function showDashboard() {
-  loginSection.classList.add('hidden');
-  dashboardSection.classList.remove('hidden');
-  logoutBtn.classList.remove('hidden');
-  loadAds();
+function showLogin() {
+  if (loginSection) loginSection.classList.remove('hidden');
+  if (dashboardSection) dashboardSection.classList.add('hidden');
 }
 
 // ─── Login Form Submission ───────────────────────────────────────────────────
@@ -116,11 +157,16 @@ if (loginForm) {
   loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     loginError.classList.add('hidden');
-    loginError.textContent = '';
 
     const key = document.getElementById('adminKey').value.trim();
     const password = adminPasswordInput.value.trim();
     const submitBtn = document.getElementById('loginSubmitBtn');
+
+    if (!key || !password) {
+      loginError.textContent = 'Please enter both your Admin Key and Password.';
+      loginError.classList.remove('hidden');
+      return;
+    }
 
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<span>Verifying credentials...</span>';
@@ -134,19 +180,19 @@ if (loginForm) {
 
       const data = await res.json();
       if (!res.ok) {
-        loginError.textContent = data.error || 'Authentication failed. Please verify key and password.';
+        loginError.textContent = data.error || 'Authentication failed.';
         loginError.classList.remove('hidden');
         return;
       }
 
-      showToast('Welcome back, Admin!');
+      showToast('Login successful! Welcome to MovieAds.');
       showDashboard();
     } catch (err) {
-      loginError.textContent = err.message || 'Connection error. Check your network.';
+      loginError.textContent = 'Network error connecting to auth server.';
       loginError.classList.remove('hidden');
     } finally {
       submitBtn.disabled = false;
-      submitBtn.innerHTML = `<span>Sign In to Dashboard</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>`;
+      submitBtn.innerHTML = '<span>Sign In to Dashboard</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>';
     }
   });
 }
@@ -162,20 +208,46 @@ if (logoutBtn) {
   });
 }
 
-// ─── 16:9 Image Upload & Live Preview ────────────────────────────────────────
-function setPreviewImage(src, meta = '16:9 Preview Active') {
-  livePreviewImg.src = src;
-  previewMetaBadge.textContent = meta;
-  dropPrompt.classList.add('hidden');
-  previewContainer.classList.remove('hidden');
+// ─── Media Upload & Live Preview (Video & Image) ──────────────────────────────
+function setPreviewMedia(type, src, meta = 'Preview Active') {
+  if (type === 'video') {
+    if (livePreviewImg) livePreviewImg.classList.add('hidden');
+    if (livePreviewVid) {
+      livePreviewVid.src = src;
+      livePreviewVid.classList.remove('hidden');
+      livePreviewVid.play().catch(() => {});
+    }
+  } else {
+    if (livePreviewVid) {
+      livePreviewVid.pause();
+      livePreviewVid.src = '';
+      livePreviewVid.classList.add('hidden');
+    }
+    if (livePreviewImg) {
+      livePreviewImg.src = src;
+      livePreviewImg.classList.remove('hidden');
+    }
+  }
+
+  if (previewMetaBadge) previewMetaBadge.textContent = meta;
+  if (dropPrompt) dropPrompt.classList.add('hidden');
+  if (previewContainer) previewContainer.classList.remove('hidden');
 }
 
 function clearPreview() {
-  livePreviewImg.src = '';
-  posterFileInput.value = '';
-  posterUrlInput.value = '';
-  dropPrompt.classList.remove('hidden');
-  previewContainer.classList.add('hidden');
+  if (livePreviewVid) {
+    livePreviewVid.pause();
+    livePreviewVid.src = '';
+    livePreviewVid.classList.add('hidden');
+  }
+  if (livePreviewImg) {
+    livePreviewImg.src = '';
+    livePreviewImg.classList.add('hidden');
+  }
+  if (mediaFileInput) mediaFileInput.value = '';
+  if (mediaUrlInput) mediaUrlInput.value = '';
+  if (dropPrompt) dropPrompt.classList.remove('hidden');
+  if (previewContainer) previewContainer.classList.add('hidden');
 }
 
 if (clearImageBtn) {
@@ -185,42 +257,43 @@ if (clearImageBtn) {
   });
 }
 
-if (posterFileInput) {
-  posterFileInput.addEventListener('change', () => {
-    const file = posterFileInput.files[0];
+if (mediaFileInput) {
+  mediaFileInput.addEventListener('change', () => {
+    const file = mediaFileInput.files[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          const ratio = (img.width / img.height).toFixed(2);
-          const isStandard169 = Math.abs(ratio - 1.78) < 0.15;
-          const badgeText = isStandard169
-            ? `${img.width}x${img.height} (16:9 Widescreen)`
-            : `${img.width}x${img.height} (Aspect ratio: ${ratio}:1)`;
-          setPreviewImage(e.target.result, badgeText);
+      const isVid = (file.type && file.type.startsWith('video/')) || /mp4|webm|mov|mkv|ogg/.test(file.name);
+      if (isVid) {
+        const objectUrl = URL.createObjectURL(file);
+        const ratio = adAspectRatio ? adAspectRatio.value : '16:9';
+        setPreviewMedia('video', objectUrl, `Video Ad (${ratio}) • ${file.name}`);
+      } else {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            const ratio = (img.width / img.height).toFixed(2);
+            const badgeText = `${img.width}x${img.height} (${adAspectRatio ? adAspectRatio.value : 'Poster'})`;
+            setPreviewMedia('image', e.target.result, badgeText);
+          };
+          img.src = e.target.result;
         };
-        img.src = e.target.result;
-      };
-      reader.readAsDataURL(file);
+        reader.readAsDataURL(file);
+      }
     }
   });
 }
 
-if (posterUrlInput) {
-  posterUrlInput.addEventListener('input', () => {
-    const url = posterUrlInput.value.trim();
+if (mediaUrlInput) {
+  mediaUrlInput.addEventListener('input', () => {
+    const url = mediaUrlInput.value.trim();
     if (url.startsWith('http://') || url.startsWith('https://')) {
-      const img = new Image();
-      img.onload = () => {
-        const ratio = (img.width / img.height).toFixed(2);
-        setPreviewImage(url, `${img.width}x${img.height} (Remote URL)`);
-      };
-      img.onerror = () => {
-        setPreviewImage(url, 'Remote URL (Image preview)');
-      };
-      img.src = url;
-    } else if (!posterFileInput.files.length) {
+      const isVid = /\.(mp4|webm|mov|ogg)($|\?)/i.test(url);
+      if (isVid) {
+        setPreviewMedia('video', url, 'Remote Video Ad Preview');
+      } else {
+        setPreviewMedia('image', url, 'Remote Image Preview');
+      }
+    } else if (!mediaFileInput.files.length) {
       clearPreview();
     }
   });
@@ -246,9 +319,9 @@ if (uploadDropZone) {
     const dt = e.dataTransfer;
     const files = dt.files;
     if (files.length) {
-      posterFileInput.files = files;
+      mediaFileInput.files = files;
       const event = new Event('change');
-      posterFileInput.dispatchEvent(event);
+      mediaFileInput.dispatchEvent(event);
     }
   });
 }
@@ -263,9 +336,11 @@ if (createAdForm) {
     const name = document.getElementById('adName').value.trim();
     const targetUrl = document.getElementById('adTargetUrl').value.trim();
     const isActive = document.getElementById('adIsActive').checked;
-    const placement = document.getElementById('adPlacement').value;
-    const file = posterFileInput.files[0];
-    const remoteUrl = posterUrlInput.value.trim();
+    const placement = adPlacement ? adPlacement.value : 'player';
+    const aspectRatio = adAspectRatio ? adAspectRatio.value : '16:9';
+    const skipSeconds = document.getElementById('adSkipSeconds')?.value || (aspectRatio === '9:16' ? 5 : 10);
+    const file = mediaFileInput.files[0];
+    const remoteUrl = mediaUrlInput.value.trim();
 
     if (!name || !targetUrl) {
       createError.textContent = 'Please fill out all required fields (Name and Destination URL).';
@@ -274,7 +349,7 @@ if (createAdForm) {
     }
 
     if (!file && !remoteUrl) {
-      createError.textContent = 'Please upload a 16:9 poster image or enter a poster URL.';
+      createError.textContent = 'Please upload a video/image file or enter a media URL.';
       createError.classList.remove('hidden');
       return;
     }
@@ -282,17 +357,27 @@ if (createAdForm) {
     const formData = new FormData();
     formData.append('name', name);
     formData.append('target_url', targetUrl);
-    formData.append('is_active', isActive);
+    formData.append('aspect_ratio', aspectRatio);
     formData.append('placement', placement);
+    formData.append('skip_seconds', skipSeconds);
+    formData.append('is_active', isActive);
 
     if (file) {
-      formData.append('poster_file', file);
+      const isVid = (file.type && file.type.startsWith('video/')) || /mp4|webm|mov|mkv|ogg/.test(file.name);
+      formData.append('media_type', isVid ? 'video' : 'image');
+      formData.append('media_file', file);
     } else if (remoteUrl) {
-      formData.append('poster_url', remoteUrl);
+      const isVid = /\.(mp4|webm|mov|ogg)($|\?)/i.test(remoteUrl);
+      formData.append('media_type', isVid ? 'video' : 'image');
+      if (isVid) {
+        formData.append('video_url', remoteUrl);
+      } else {
+        formData.append('poster_url', remoteUrl);
+      }
     }
 
     submitAdBtn.disabled = true;
-    submitAdBtn.innerHTML = '<span>Uploading and publishing...</span>';
+    submitAdBtn.innerHTML = '<span>Uploading and publishing media...</span>';
 
     try {
       const res = await fetch('/api/ads', {
@@ -361,15 +446,28 @@ function renderDashboard() {
   emptyAdsState.classList.add('hidden');
   adsListContainer.innerHTML = currentAds.map((ad) => {
     const ctr = ad.impressions > 0 ? ((ad.clicks / ad.impressions) * 100).toFixed(1) : '0.0';
+    const isVideo = ad.media_type === 'video' || Boolean(ad.video_url);
+    const isShorts = ad.aspect_ratio === '9:16';
+    const mediaSource = ad.video_url || ad.poster_url || '';
+
+    const formatBadge = isShorts
+      ? (isVideo ? '9:16 Shorts Video' : '9:16 Shorts Poster')
+      : (isVideo ? '16:9 Video Ad' : '16:9 Player Poster');
+
     return `
       <div class="ad-card" data-id="${ad.id}">
-        <!-- 16:9 Banner Image Frame -->
-        <div class="ad-banner-16-9">
-          <img src="${ad.full_poster_url}" alt="${escapeHtml(ad.name)}" class="ad-banner-img" loading="lazy">
+        <!-- Media Frame -->
+        <div class="${isShorts ? 'ad-banner-16-9' : 'ad-banner-16-9'}">
+          ${isVideo ? `
+            <video src="${escapeHtml(mediaSource)}" class="ad-banner-img" muted loop playsinline onmouseover="this.play()" onmouseout="this.pause()"></video>
+            <div style="position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.7); padding: 2px 6px; border-radius: 4px; font-size: 10px; color: #fff;">🎬 Video</div>
+          ` : `
+            <img src="${escapeHtml(mediaSource)}" alt="${escapeHtml(ad.name)}" class="ad-banner-img" loading="lazy">
+          `}
           <span class="ad-status-pill ${ad.is_active ? 'pill-active' : 'pill-paused'}">
             ${ad.is_active ? 'Active' : 'Paused'}
           </span>
-          <span class="ad-aspect-badge">16:9</span>
+          <span class="ad-aspect-badge">${formatBadge}</span>
         </div>
 
         <div class="ad-card-body">
@@ -450,20 +548,9 @@ window.deleteAd = async function(id) {
 
 window.copyAdLink = function(url) {
   navigator.clipboard.writeText(url).then(() => {
-    showToast('Click tracking link copied to clipboard!');
+    showToast('Click URL copied to clipboard!');
   }).catch(() => {
-    prompt('Copy ad link:', url);
-  });
-};
-
-window.copySnippet = function(elementId) {
-  const el = document.getElementById(elementId);
-  if (!el) return;
-  const text = el.innerText || el.textContent;
-  navigator.clipboard.writeText(text).then(() => {
-    showToast('Code snippet copied to clipboard!');
-  }).catch(() => {
-    showToast('Unable to copy code');
+    prompt('Copy Click URL:', url);
   });
 };
 
@@ -474,8 +561,8 @@ function escapeHtml(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+    .replace(/'/g, '&#39;');
 }
 
-// Initialize on page load
+// Initialize
 checkAuth();
