@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>MovieAds - 16:9 Ad Management & Serving Platform</title>
+  <meta name="description" content="Clean, mobile-friendly 16:9 ad poster management and private ad serving system for Movieflix.">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23e50914'><path d='M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zm-10-7h9v6h-9z'/></svg>">
+</head>
+<body>
+  <!-- Top Navigation Header -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="4" width="20" height="16" rx="3"></rect>
+            <path d="M10 9l5 3-5 3V9z" fill="currentColor"></path>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-title">Movie<span class="highlight">Ads</span></span>
+          <span class="brand-badge">16:9 Server</span>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <div class="server-status">
+          <span class="status-pulse"></span>
+          <span class="status-label">Live</span>
+        </div>
+        <button id="logoutBtn" class="btn btn-outline btn-sm hidden">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+          <span>Sign Out</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="main-content">
+    <!-- Toast Notifications -->
+    <div id="toast" class="toast hidden"></div>
+
+    <!-- 1. LOGIN SCREEN -->
+    <section id="loginSection" class="view-section">
+      <div class="login-wrapper">
+        <div class="login-card">
+          <div class="login-header">
+            <div class="login-icon-badge">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+            </div>
+            <h2>Admin Portal</h2>
+            <p>Enter your private authorization key and password to manage ads</p>
+          </div>
+
+          <form id="loginForm" class="login-form">
+            <div class="input-group">
+              <label for="adminKey">Admin Key</label>
+              <div class="input-field-wrap">
+                <svg class="field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 2l-2 2m-2-2l2 2m0 0l-7 7m7-7v4m-7 3l-3 3m0 0H5a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-4"></path>
+                </svg>
+                <input type="text" id="adminKey" name="key" placeholder="Enter key (e.g. 2133933919)" autocomplete="username" required>
+              </div>
+            </div>
+
+            <div class="input-group">
+              <label for="adminPassword">Password</label>
+              <div class="input-field-wrap">
+                <svg class="field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="11" width="18" height="11" rx="2"></rect>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+                <input type="password" id="adminPassword" name="password" placeholder="Enter password" autocomplete="current-password" required>
+                <button type="button" id="togglePasswordBtn" class="btn-icon field-action" title="Toggle password visibility">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div id="loginError" class="alert alert-error hidden"></div>
+
+            <button type="submit" id="loginSubmitBtn" class="btn btn-primary btn-block">
+              <span>Sign In to Dashboard</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </button>
+          </form>
+
+          <div class="login-footer">
+            <span class="security-tag">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"></path>
+              </svg>
+              Encrypted Session &bull; Private Endpoint
+            </span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. DASHBOARD SCREEN -->
+    <section id="dashboardSection" class="view-section hidden">
+      <!-- Stats Overview -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-meta">
+            <span class="stat-label">Total Ads</span>
+            <span id="statTotalAds" class="stat-value">0</span>
+          </div>
+          <div class="stat-icon-wrap icon-purple">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+              <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+            </svg>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-meta">
+            <span class="stat-label">Active / Live</span>
+            <span id="statActiveAds" class="stat-value">0</span>
+          </div>
+          <div class="stat-icon-wrap icon-green">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+              <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-meta">
+            <span class="stat-label">Impressions</span>
+            <span id="statTotalImpressions" class="stat-value">0</span>
+          </div>
+          <div class="stat-icon-wrap icon-blue">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-meta">
+            <span class="stat-label">Total Clicks</span>
+            <span id="statTotalClicks" class="stat-value">0</span>
+          </div>
+          <div class="stat-icon-wrap icon-red">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M15 3h6v6"></path>
+              <path d="M10 14L21 3"></path>
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab Navigation -->
+      <div class="tab-bar">
+        <button class="tab-btn active" data-tab="campaigns">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7"></rect>
+            <rect x="14" y="3" width="7" height="7"></rect>
+            <rect x="14" y="14" width="7" height="7"></rect>
+            <rect x="3" y="14" width="7" height="7"></rect>
+          </svg>
+          <span>Campaigns</span>
+          <span id="campaignsCountBadge" class="tab-badge">0</span>
+        </button>
+
+        <button class="tab-btn" data-tab="create">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="16"></line>
+            <line x1="8" y1="12" x2="16" y2="12"></line>
+          </svg>
+          <span>Upload New 16:9 Ad</span>
+        </button>
+
+        <button class="tab-btn" data-tab="api">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="16 18 22 12 16 6"></polyline>
+            <polyline points="8 6 2 12 8 18"></polyline>
+          </svg>
+          <span>API & Integration</span>
+        </button>
+      </div>
+
+      <!-- TAB 1: CAMPAIGNS LIST -->
+      <div id="tabContentCampaigns" class="tab-content active">
+        <div class="section-title-row">
+          <div>
+            <h3>Active Campaigns</h3>
+            <p class="section-desc">Manage, monitor, and publish your 16:9 banner ads</p>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="switchTab('create')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span>New Ad</span>
+          </button>
+        </div>
+
+        <div id="adsListContainer" class="ads-grid">
+          <!-- Dynamic ad cards injected here -->
+        </div>
+
+        <div id="emptyAdsState" class="empty-state hidden">
+          <div class="empty-icon-wrap">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+              <line x1="2" y1="10" x2="22" y2="10"></line>
+            </svg>
+          </div>
+          <h4>No Ads Uploaded Yet</h4>
+          <p>Create your first 16:9 campaign poster to begin serving ads to Movieflix.</p>
+          <button class="btn btn-primary" onclick="switchTab('create')">
+            <span>Upload Your First 16:9 Ad</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- TAB 2: CREATE NEW AD -->
+      <div id="tabContentCreate" class="tab-content">
+        <div class="create-card">
+          <div class="section-header-box">
+            <h3>Upload New 16:9 Ad Poster</h3>
+            <p>Upload a standard 16:9 widescreen poster image (e.g. 1920x1080 or 1280x720) and set its destination.</p>
+          </div>
+
+          <form id="createAdForm" class="create-form">
+            <div class="form-row">
+              <div class="input-group">
+                <label for="adName">Ad Campaign Name <span class="req">*</span></label>
+                <input type="text" id="adName" name="name" placeholder="e.g. Netflix Special Premiere 50% Off" required>
+              </div>
+
+              <div class="input-group">
+                <label for="adTargetUrl">Destination / Target URL <span class="req">*</span></label>
+                <input type="url" id="adTargetUrl" name="target_url" placeholder="https://example.com/click-destination" required>
+              </div>
+            </div>
+
+            <!-- 16:9 Poster Upload Box -->
+            <div class="input-group">
+              <label>16:9 Ad Poster Banner <span class="req">*</span></label>
+
+              <div id="uploadDropZone" class="poster-drop-zone">
+                <input type="file" id="posterFileInput" name="poster_file" accept="image/png,image/jpeg,image/webp,image/gif" class="file-hidden-input">
+
+                <!-- 16:9 Preview Frame -->
+                <div id="aspectRatioFrame" class="aspect-16-9-frame">
+                  <div id="dropPrompt" class="drop-prompt">
+                    <div class="upload-cloud-icon">
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                      </svg>
+                    </div>
+                    <div class="upload-text-content">
+                      <p class="drop-title">Tap to browse or drop 16:9 poster image</p>
+                      <p class="drop-sub">Recommended: 1920x1080, 1280x720 &bull; Max 15MB</p>
+                    </div>
+                    <span class="aspect-ratio-pill">16:9 Aspect Ratio</span>
+                  </div>
+
+                  <!-- Live Image Preview inside 16:9 frame -->
+                  <div id="previewContainer" class="preview-container hidden">
+                    <img id="livePreviewImg" src="" alt="16:9 Preview" class="live-preview-img">
+                    <div class="preview-overlay">
+                      <span id="previewMetaBadge" class="badge-16-9">16:9 Preview Active</span>
+                      <button type="button" id="clearImageBtn" class="btn btn-outline btn-xs btn-danger">Change Image</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Or Paste URL Option -->
+              <div class="or-separator">
+                <span>OR PASTE IMAGE URL</span>
+              </div>
+              <div class="input-field-wrap">
+                <svg class="field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="2" y1="12" x2="22" y2="12"></line>
+                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                </svg>
+                <input type="url" id="posterUrlInput" name="poster_url" placeholder="https://cdn.example.com/banner-1920x1080.jpg">
+              </div>
+            </div>
+
+            <!-- Publish Options -->
+            <div class="form-row form-options">
+              <label class="toggle-control">
+                <input type="checkbox" id="adIsActive" name="is_active" checked>
+                <span class="toggle-slider"></span>
+                <span class="toggle-label">Publish and make live immediately</span>
+              </label>
+
+              <div class="placement-select-wrap">
+                <label for="adPlacement">Placement Tag:</label>
+                <select id="adPlacement" name="placement" class="select-input">
+                  <option value="all">All Placements (Banner + Modal)</option>
+                  <option value="home_banner">Home Banner</option>
+                  <option value="interstitial">Interstitial Pop-Up</option>
+                  <option value="player_overlay">Video Player Overlay</option>
+                </select>
+              </div>
+            </div>
+
+            <div id="createError" class="alert alert-error hidden"></div>
+            <div id="createSuccess" class="alert alert-success hidden"></div>
+
+            <div class="form-actions">
+              <button type="submit" id="submitAdBtn" class="btn btn-primary btn-lg">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="17 8 12 3 7 8"></polyline>
+                  <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                <span>Upload & Publish Ad</span>
+              </button>
+              <button type="button" class="btn btn-secondary btn-lg" onclick="switchTab('campaigns')">Cancel</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- TAB 3: API & INTEGRATION GUIDE -->
+      <div id="tabContentApi" class="tab-content">
+        <div class="api-guide-card">
+          <div class="section-header-box">
+            <h3>MovieAds Client Integration API</h3>
+            <p>Connect Movieflix (Web & APK) to fetch your published 16:9 ads securely using your server-side secret key.</p>
+          </div>
+
+          <div class="api-endpoint-card">
+            <div class="endpoint-badge-row">
+              <span class="http-badge get">GET</span>
+              <span class="endpoint-path">/api/v1/ads</span>
+              <span class="security-badge">Protected &bull; Requires Secret Key</span>
+            </div>
+            <p class="endpoint-desc">Returns a list of all currently active 16:9 ads with direct banner URLs and click-tracking links.</p>
+
+            <div class="code-box">
+              <div class="code-box-header">
+                <span>cURL Request Example</span>
+                <button class="btn btn-copy btn-xs" onclick="copySnippet('curlExample')">Copy</button>
+              </div>
+              <pre id="curlExample"><code>curl -H "X-Ad-Secret-Key: mf_ad_sec_89a31bc09e" \
+  https://ads.wallpaperdomain.xyz/api/v1/ads</code></pre>
+            </div>
+
+            <div class="code-box">
+              <div class="code-box-header">
+                <span>JSON Response (16:9 Banner Format)</span>
+              </div>
+              <pre><code>{
+  "status": "success",
+  "count": 1,
+  "ads": [
+    {
+      "id": "ad_1729000000000_abc",
+      "name": "Special Offer",
+      "aspect_ratio": "16:9",
+      "poster_url": "https://ads.wallpaperdomain.xyz/uploads/ad_16_9_sample.jpg",
+      "target_url": "https://example.com/promo",
+      "click_url": "https://ads.wallpaperdomain.xyz/api/v1/click/ad_1729000000000_abc",
+      "impression_url": "https://ads.wallpaperdomain.xyz/api/v1/impression/ad_1729000000000_abc"
+    }
+  ]
+}</code></pre>
+            </div>
+
+            <div class="code-box">
+              <div class="code-box-header">
+                <span>Movieflix React Native / Web Integration Snippet</span>
+                <button class="btn btn-copy btn-xs" onclick="copySnippet('rnExample')">Copy</button>
+              </div>
+              <pre id="rnExample"><code>// Fetch active 16:9 ads in Movieflix
+export async function fetchMovieAds() {
+  const res = await fetch('https://ads.wallpaperdomain.xyz/api/v1/ads', {
+    headers: {
+      'X-Ad-Secret-Key': process.env.ADS_SECRET_KEY || 'mf_ad_sec_89a31bc09e',
+    },
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.ads || [];
+}</code></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "name": "movieads",
+  "version": "1.0.0",
+  "description": "MovieAds - Clean Mobile-Friendly 16:9 Ad Management & Ad Serving Platform",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
