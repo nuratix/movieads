@@ -51,40 +51,19 @@ function showToast(message, duration = 3000) {
   }, duration);
 }
 
-// ─── Format & Aspect Ratio Selector (16:9 vs 9:16) ───────────────────────────
+// ─── Format & Aspect Ratio Selector (16:9 Standard) ───────────────────────────
 window.selectFormat = function(ratio, defaultPlacement) {
-  const btn169 = document.getElementById('formatBtn169');
-  const btn916 = document.getElementById('formatBtn916');
-
-  if (ratio === '9:16') {
-    if (btn169) btn169.classList.remove('active');
-    if (btn916) btn916.classList.add('active');
-    if (adAspectRatio) adAspectRatio.value = '9:16';
-    if (aspectRatioFrame) {
-      aspectRatioFrame.classList.remove('aspect-16-9-frame');
-      aspectRatioFrame.classList.add('aspect-9-16-frame');
-    }
-    if (aspectBadgeText) aspectBadgeText.textContent = '9:16 Shorts Ratio';
-    if (uploadFieldLabel) uploadFieldLabel.textContent = 'Ad Media File (9:16 Shorts Video or Vertical Poster) *';
-    if (dropTitle) dropTitle.textContent = 'Tap to browse or drop 9:16 video or poster';
-    if (adPlacement) adPlacement.value = defaultPlacement || 'shorts';
-    const skipSelect = document.getElementById('adSkipSeconds');
-    if (skipSelect) skipSelect.value = '5';
-  } else {
-    if (btn169) btn169.classList.add('active');
-    if (btn916) btn916.classList.remove('active');
-    if (adAspectRatio) adAspectRatio.value = '16:9';
-    if (aspectRatioFrame) {
-      aspectRatioFrame.classList.remove('aspect-9-16-frame');
-      aspectRatioFrame.classList.add('aspect-16-9-frame');
-    }
-    if (aspectBadgeText) aspectBadgeText.textContent = '16:9 Aspect Ratio';
-    if (uploadFieldLabel) uploadFieldLabel.textContent = 'Ad Media File (16:9 Video or Widescreen Poster) *';
-    if (dropTitle) dropTitle.textContent = 'Tap to browse or drop 16:9 video or poster';
-    if (adPlacement) adPlacement.value = defaultPlacement || 'player';
-    const skipSelect = document.getElementById('adSkipSeconds');
-    if (skipSelect) skipSelect.value = '10';
+  if (adAspectRatio) adAspectRatio.value = '16:9';
+  if (aspectRatioFrame) {
+    aspectRatioFrame.classList.remove('aspect-9-16-frame');
+    aspectRatioFrame.classList.add('aspect-16-9-frame');
   }
+  if (aspectBadgeText) aspectBadgeText.textContent = '16:9 Aspect Ratio';
+  if (uploadFieldLabel) uploadFieldLabel.textContent = 'Ad Media File (16:9 Video or Widescreen Poster) *';
+  if (dropTitle) dropTitle.textContent = 'Tap to browse or drop 16:9 video or poster';
+  if (adPlacement) adPlacement.value = 'player';
+  const skipSelect = document.getElementById('adSkipSeconds');
+  if (skipSelect) skipSelect.value = '10';
 };
 
 // ─── Password Visibility Toggle ──────────────────────────────────────────────
@@ -447,12 +426,8 @@ function renderDashboard() {
   adsListContainer.innerHTML = currentAds.map((ad) => {
     const ctr = ad.impressions > 0 ? ((ad.clicks / ad.impressions) * 100).toFixed(1) : '0.0';
     const isVideo = ad.media_type === 'video' || Boolean(ad.video_url);
-    const isShorts = ad.aspect_ratio === '9:16';
     const mediaSource = ad.video_url || ad.poster_url || '';
-
-    const formatBadge = isShorts
-      ? (isVideo ? '9:16 Shorts Video' : '9:16 Shorts Poster')
-      : (isVideo ? '16:9 Video Ad' : '16:9 Player Poster');
+    const formatBadge = isVideo ? '16:9 Video Ad' : '16:9 Player Poster';
 
     return `
       <div class="ad-card" data-id="${ad.id}">

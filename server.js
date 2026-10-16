@@ -249,7 +249,7 @@ app.post('/api/ads', requireAdmin, upload.any(), (req, res) => {
 
     const cleanName = String(name || '').trim();
     const cleanTarget = String(target_url || '').trim();
-    const ratio = aspect_ratio === '9:16' ? '9:16' : '16:9';
+    const ratio = '16:9';
 
     const files = req.files || [];
     let finalPosterUrl = (poster_url || '').trim();
@@ -283,8 +283,8 @@ app.post('/api/ads', requireAdmin, upload.any(), (req, res) => {
     }
 
     let finalPlacement = (placement || '').trim().toLowerCase();
-    if (!finalPlacement || finalPlacement === 'auto') {
-      finalPlacement = ratio === '9:16' ? 'shorts' : 'player';
+    if (!finalPlacement || finalPlacement === 'auto' || finalPlacement === 'shorts') {
+      finalPlacement = 'player';
     }
 
     const ads = loadAds();
@@ -298,7 +298,7 @@ app.post('/api/ads', requireAdmin, upload.any(), (req, res) => {
       media_type: detectedType,
       aspect_ratio: ratio,
       placement: finalPlacement,
-      skip_seconds: Number(skip_seconds) || (ratio === '9:16' ? 5 : 10),
+      skip_seconds: Number(skip_seconds) || 10,
       is_active: is_active === 'true' || is_active === true || is_active === 1 || is_active === '1',
       impressions: 0,
       clicks: 0,
@@ -571,7 +571,7 @@ app.get('/api/v1/status', (_req, res) => {
     status: 'online',
     service: 'movieads',
     active_campaigns: activeCount,
-    supported_formats: ['16:9 Image', '16:9 Video', '9:16 Image', '9:16 Video'],
+    supported_formats: ['16:9 Image', '16:9 Video'],
     timestamp: new Date().toISOString(),
   });
 });
@@ -586,5 +586,5 @@ app.listen(PORT, HOST, () => {
   console.log(`[MovieAds] Server listening on http://${HOST}:${PORT}`);
   console.log(`[MovieAds] Admin Key: ${ADMIN_KEY ? 'configured in env' : 'MISSING'}`);
   console.log(`[MovieAds] Secret Ad Key: ${ADS_SECRET_KEY ? 'configured in env' : 'MISSING'}`);
-  console.log(`[MovieAds] Formats Supported: 16:9 Video/Poster & 9:16 Shorts Video/Poster`);
+  console.log(`[MovieAds] Formats Supported: 16:9 Video/Poster`);
 });

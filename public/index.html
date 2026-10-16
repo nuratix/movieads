@@ -72,7 +72,7 @@
                 <svg class="field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 2l-2 2m-2-2l2 2m0 0l-7 7m7-7v4m-7 3l-3 3m0 0H5a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-4"></path>
                 </svg>
-                <input type="text" id="adminKey" name="key" placeholder="Enter key (e.g. 2133933919)" autocomplete="username" required>
+                <input type="text" id="adminKey" name="key" placeholder="Enter Admin Key" autocomplete="username" required>
               </div>
             </div>
 
@@ -244,7 +244,7 @@
         <div class="create-card">
           <div class="section-header-box">
             <h3>Create New Ad Campaign</h3>
-            <p>Upload 16:9 Player Banners &amp; Videos, or 9:16 Shorts Posters &amp; Video Ads for Movieflix.</p>
+            <p>Upload 16:9 Player Banners &amp; Videos for Movieflix.</p>
           </div>
 
           <form id="createAdForm" class="create-form">
@@ -260,21 +260,7 @@
               </div>
             </div>
 
-            <!-- Format & Aspect Ratio Selector -->
-            <div class="input-group">
-              <label>Ad Format &amp; Aspect Ratio <span class="req">*</span></label>
-              <div class="format-toggle-group">
-                <button type="button" id="formatBtn169" class="format-toggle-btn active" onclick="selectFormat('16:9', 'player')">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"></rect><polygon points="10 9 15 12 10 15 10 9" fill="currentColor"></polygon></svg>
-                  <span>16:9 Landscape (Player &amp; Web)</span>
-                </button>
-                <button type="button" id="formatBtn916" class="format-toggle-btn" onclick="selectFormat('9:16', 'shorts')">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"></rect><polygon points="10 9 15 12 10 15 10 9" fill="currentColor"></polygon></svg>
-                  <span>9:16 Vertical (Movieflix Shorts)</span>
-                </button>
-              </div>
-              <input type="hidden" id="adAspectRatio" name="aspect_ratio" value="16:9">
-            </div>
+            <input type="hidden" id="adAspectRatio" name="aspect_ratio" value="16:9">
 
             <!-- Media Upload Box (Images & Videos) -->
             <div class="input-group">
@@ -338,8 +324,6 @@
                 <label for="adPlacement">Placement Target:</label>
                 <select id="adPlacement" name="placement" class="select-input">
                   <option value="player">Movie Player (16:9 Video &amp; Banner)</option>
-                  <option value="shorts">Movieflix Shorts (9:16 Video &amp; Poster)</option>
-                  <option value="all">All Placements</option>
                 </select>
               </div>
 
@@ -347,7 +331,7 @@
                 <label for="adSkipSeconds">Skip Countdown (sec):</label>
                 <select id="adSkipSeconds" name="skip_seconds" class="select-input">
                   <option value="10">10 Seconds (Standard Player)</option>
-                  <option value="5">5 Seconds (Shorts &amp; Midroll)</option>
+                  <option value="5">5 Seconds (Midroll)</option>
                   <option value="15">15 Seconds</option>
                   <option value="0">Instant Skip</option>
                 </select>
