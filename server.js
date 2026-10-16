@@ -38,7 +38,8 @@ function loadAds() {
   try {
     const raw = fs.readFileSync(DB_FILE, 'utf-8');
     const data = JSON.parse(raw);
-    return Array.isArray(data) ? data : (Array.isArray(data.ads) ? data.ads : []);
+    const list = Array.isArray(data) ? data : (Array.isArray(data.ads) ? data.ads : []);
+    return list.filter(ad => ad && ad.placement !== 'shorts' && ad.aspect_ratio !== '9:16');
   } catch (err) {
     console.error('Error reading ads database:', err);
     return [];
