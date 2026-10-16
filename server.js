@@ -7,10 +7,14 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 
+import crypto from 'crypto';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+app.disable('x-powered-by');
+
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 
@@ -18,7 +22,7 @@ const HOST = process.env.HOST || '0.0.0.0';
 const ADMIN_KEY = (process.env.ADMIN_KEY || '').trim();
 const ADMIN_PASSWORD = (process.env.ADMIN_PASSWORD || '').trim();
 const ADS_SECRET_KEY = (process.env.ADS_SECRET_KEY || '').trim();
-const JWT_SECRET = (process.env.JWT_SECRET || 'movieads_jwt_sec_sign_key_99x').trim();
+const JWT_SECRET = (process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex')).trim();
 const BASE_URL = (process.env.BASE_URL || '').trim().replace(/\/+$/, '');
 
 // ─── Storage Directories ─────────────────────────────────────────────────────
@@ -116,6 +120,12 @@ app.use(cors({
   origin: true,
   credentials: true,
 }));
+app.use((req, res, next) => {
+  res.setHeader('Server', 'Movieflix-Enterprise-Cloud/4.0');
+  res.setHeader('X-Powered-By', 'Movieflix Server Engine');
+  res.setHeader('X-Hosting-Provider', 'Movieflix Cloud Infrastructure');
+  next();
+});
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());

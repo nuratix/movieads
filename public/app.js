@@ -165,7 +165,17 @@ async function loadAdminConfig() {
         }
         const rnSnippet = document.getElementById('rnExample');
         if (rnSnippet) {
-          rnSnippet.innerHTML = `<code>// Fetch active 16:9 ads in Movieflix\nexport async function fetchMovieAds() {\n  const res = await fetch('https://ads.wallpaperdomain.xyz/api/v1/ads', {\n    headers: {\n      'X-Ad-Secret-Key': process.env.ADS_SECRET_KEY || '${data.ads_secret_key}',\n    },\n  });\n  if (!res.ok) return [];\n  const data = await res.json();\n  return data.ads || [];\n}</code>`;
+          rnSnippet.innerHTML = `<code>// Fetch active 16:9 ads in Movieflix
+export async function fetchMovieAds() {
+  const res = await fetch('https://ads.wallpaperdomain.xyz/api/v1/ads', {
+    headers: {
+      'X-Ad-Secret-Key': process.env.ADS_SECRET_KEY,
+    },
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.ads || [];
+}</code>`;
         }
       }
     }
