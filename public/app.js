@@ -87,6 +87,8 @@ window.switchTab = function(tabName) {
     ? 'tabContentCampaigns'
     : tabName === 'create'
     ? 'tabContentCreate'
+    : tabName === 'promos'
+    ? 'tabContentPromos'
     : 'tabContentApi';
 
   const targetContent = document.getElementById(targetId);
@@ -94,6 +96,8 @@ window.switchTab = function(tabName) {
 
   if (tabName === 'campaigns') {
     loadAds();
+  } else if (tabName === 'promos') {
+    loadPromos();
   }
 };
 
@@ -647,6 +651,212 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+// ─── VIP Promo Codes Management ─────────────────────────────────────────────
+let currentPromos = [];
+let activePromoFilter = 'all';
+
+const promosTableBody = document.getElementById('promosTableBody');
+const promosCountBadge = document.getElementById('promosCountBadge');
+const promoFilterAllCount = document.getElementById('promoFilterAllCount');
+const promoFilterActiveCount = document.getElementById('promoFilterActiveCount');
+const promoFilterClaimedCount = document.getElementById('promoFilterClaimedCount');
+const createPromoForm = document.getElementById('createPromoForm');
+const promoCustomCode = document.getElementById('promoCustomCode');
+const promoDurationMonths = document.getElementById('promoDurationMonths');
+const generatePromoBtn = document.getElementById('generatePromoBtn');
+const promoCreateError = document.getElementById('promoCreateError');
+const promoCreateSuccess = document.getElementById('promoCreateSuccess');
+
+window.loadPromos = async function() {
+  if (!promosTableBody) return;
+  try {
+    const res = await authFetch('/api/promos');
+    if (!res.ok) {
+      if (res.status === 401) showLogin();
+      return;
+    }
+    const data = await res.json();
+    currentPromos = data.promos || [];
+    renderPromos();
+  } catch (err) {
+    console.error('Failed to load promos:', err);
+    promosTableBody.innerHTML = `
+      <tr>
+        <td colspan="7" style="text-align: center; padding: 24px; color: #ef4444;">
+          Failed to load promo codes. Please refresh.
+        </td>
+      </tr>
+    `;
+  }
+};
+
+window.filterPromos = function(filter) {
+  activePromoFilter = filter;
+  document.querySelectorAll('.promo-filter-btn').forEach((btn) => {
+    btn.classList.toggle('active', btn.getAttribute('data-filter') === filter);
+  });
+  renderPromos();
+};
+
+window.renderPromos = function() {
+  if (!promosTableBody) return;
+
+  const total = currentPromos.length;
+  const activeCount = currentPromos.filter((p) => !p.is_claimed).length;
+  const claimedCount = currentPromos.filter((p) => p.is_claimed).length;
+
+  if (promosCountBadge) promosCountBadge.textContent = total;
+  if (promoFilterAllCount) promoFilterAllCount.textContent = total;
+  if (promoFilterActiveCount) promoFilterActiveCount.textContent = activeCount;
+  if (promoFilterClaimedCount) promoFilterClaimedCount.textContent = claimedCount;
+
+  let filtered = currentPromos;
+  if (activePromoFilter === 'active') {
+    filtered = currentPromos.filter((p) => !p.is_claimed);
+  } else if (activePromoFilter === 'claimed') {
+    filtered = currentPromos.filter((p) => p.is_claimed);
+  }
+
+  if (filtered.length === 0) {
+    promosTableBody.innerHTML = `
+      <tr>
+        <td colspan="7" style="text-align: center; padding: 32px; color: var(--text-muted);">
+          No promo codes found${activePromoFilter !== 'all' ? ` for "${activePromoFilter}" filter` : ''}.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  promosTableBody.innerHTML = filtered.map((promo) => {
+    const durationLabel = `${promo.duration_months} Month${promo.duration_months > 1 ? 's' : ''}`;
+    const isClaimed = Boolean(promo.is_claimed);
+    const createdDate = promo.created_at ? new Date(promo.created_at).toLocaleDateString() : '—';
+    const claimedDate = promo.claimed_at ? new Date(promo.claimed_at).toLocaleString() : '—';
+
+    let claimedByHtml = '<span style="color: var(--text-muted);">Not Claimed</span>';
+    if (isClaimed && promo.claimed_by) {
+      const email = promo.claimed_by.email || promo.claimed_by.user_id || 'Unknown';
+      const acctId = promo.claimed_by.account_id ? `ID: ${promo.claimed_by.account_id}` : '';
+      claimedByHtml = `
+        <div class="user-claim-info">
+          <span class="user-claim-email">${escapeHtml(email)}</span>
+          ${acctId ? `<span class="user-claim-id">${escapeHtml(acctId)}</span>` : ''}
+        </div>
+      `;
+    }
+
+    return `
+      <tr>
+        <td style="padding: 12px;">
+          <div class="promo-code-badge" onclick="copyPromoCode('${escapeHtml(promo.code)}')" title="Click to copy code">
+            <span>${escapeHtml(promo.code)}</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+          </div>
+        </td>
+        <td style="padding: 12px; font-weight: 600; color: var(--text-primary); font-size: 13px;">
+          ${durationLabel}
+        </td>
+        <td style="padding: 12px;">
+          <span class="promo-status-badge ${isClaimed ? 'claimed' : 'active'}">
+            ${isClaimed ? 'Claimed / Expired' : 'Active'}
+          </span>
+        </td>
+        <td style="padding: 12px;">
+          ${claimedByHtml}
+        </td>
+        <td style="padding: 12px; font-size: 12px; color: var(--text-secondary);">
+          ${claimedDate}
+        </td>
+        <td style="padding: 12px; font-size: 12px; color: var(--text-secondary);">
+          ${createdDate}
+        </td>
+        <td style="padding: 12px; text-align: right;">
+          <button type="button" class="btn btn-xs btn-outline" style="color: #ef4444; border-color: rgba(239, 68, 68, 0.3);" onclick="deletePromo('${escapeHtml(promo.code)}')">
+            Delete
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+};
+
+window.copyPromoCode = function(code) {
+  if (!code) return;
+  navigator.clipboard.writeText(code).then(() => {
+    showToast(`Code "${code}" copied to clipboard!`);
+  }).catch(() => {
+    prompt('Copy Promo Code:', code);
+  });
+};
+
+window.deletePromo = async function(code) {
+  if (!confirm(`Are you sure you want to delete promo code "${code}"?`)) return;
+  try {
+    const res = await authFetch(`/api/promos/${encodeURIComponent(code)}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert(err.error || 'Failed to delete promo code.');
+      return;
+    }
+    showToast(`Promo code "${code}" deleted.`);
+    loadPromos();
+  } catch (err) {
+    alert(err.message || 'Network error deleting promo code.');
+  }
+};
+
+if (createPromoForm) {
+  createPromoForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (promoCreateError) promoCreateError.classList.add('hidden');
+    if (promoCreateSuccess) promoCreateSuccess.classList.add('hidden');
+
+    const code = (promoCustomCode?.value || '').trim();
+    const duration_months = parseInt(promoDurationMonths?.value || '1', 10);
+
+    if (generatePromoBtn) generatePromoBtn.disabled = true;
+
+    try {
+      const res = await authFetch('/api/promos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, duration_months }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        if (promoCreateError) {
+          promoCreateError.textContent = data.error || 'Failed to generate promo code.';
+          promoCreateError.classList.remove('hidden');
+        }
+        return;
+      }
+
+      if (promoCreateSuccess) {
+        promoCreateSuccess.textContent = `Promo code "${data.promo.code}" created for ${data.promo.duration_months} month(s)!`;
+        promoCreateSuccess.classList.remove('hidden');
+      }
+
+      if (promoCustomCode) promoCustomCode.value = '';
+      showToast(`Promo code "${data.promo.code}" created!`);
+      loadPromos();
+    } catch (err) {
+      if (promoCreateError) {
+        promoCreateError.textContent = err.message || 'Error generating promo code.';
+        promoCreateError.classList.remove('hidden');
+      }
+    } finally {
+      if (generatePromoBtn) generatePromoBtn.disabled = false;
+    }
+  });
 }
 
 // Initialize

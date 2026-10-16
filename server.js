@@ -25,13 +25,17 @@ const BASE_URL = (process.env.BASE_URL || '').trim().replace(/\/+$/, '');
 const DATA_DIR = path.join(__dirname, 'data');
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
 const DB_FILE = path.join(DATA_DIR, 'ads.json');
+const PROMOS_FILE = path.join(DATA_DIR, 'promos.json');
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
-// Initialize database file if not exists
+// Initialize database files if not exist
 if (!fs.existsSync(DB_FILE)) {
   fs.writeFileSync(DB_FILE, JSON.stringify({ ads: [] }, null, 2), 'utf-8');
+}
+if (!fs.existsSync(PROMOS_FILE)) {
+  fs.writeFileSync(PROMOS_FILE, JSON.stringify({ promos: [] }, null, 2), 'utf-8');
 }
 
 function loadAds() {
@@ -50,6 +54,23 @@ function saveAds(ads) {
   const tmpFile = `${DB_FILE}.tmp`;
   fs.writeFileSync(tmpFile, JSON.stringify({ ads }, null, 2), 'utf-8');
   fs.renameSync(tmpFile, DB_FILE);
+}
+
+function loadPromos() {
+  try {
+    const raw = fs.readFileSync(PROMOS_FILE, 'utf-8');
+    const data = JSON.parse(raw);
+    return Array.isArray(data) ? data : (Array.isArray(data.promos) ? data.promos : []);
+  } catch (err) {
+    console.error('Error reading promos database:', err);
+    return [];
+  }
+}
+
+function savePromos(promos) {
+  const tmpFile = `${PROMOS_FILE}.tmp`;
+  fs.writeFileSync(tmpFile, JSON.stringify({ promos }, null, 2), 'utf-8');
+  fs.renameSync(tmpFile, PROMOS_FILE);
 }
 
 // ─── Multer Setup: 16:9 & 9:16 Images and Videos (up to 100MB) ───────────────
@@ -575,6 +596,107 @@ app.get('/api/v1/status', (_req, res) => {
     active_campaigns: activeCount,
     supported_formats: ['16:9 Image', '16:9 Video'],
     timestamp: new Date().toISOString(),
+  });
+});
+
+// ─── VIP Promo Codes Management (Admin Protected) ───────────────────────────
+// 1. GET ALL PROMO CODES
+app.get('/api/promos', requireAdmin, (_req, res) => {
+  const promos = loadPromos();
+  return res.status(200).json({ success: true, promos });
+});
+
+// 2. CREATE NEW PROMO CODE
+app.post('/api/promos', requireAdmin, (req, res) => {
+  let { code, duration_months } = req.body || {};
+  let months = parseInt(duration_months, 10);
+  if (isNaN(months) || months < 1) months = 1;
+  if (months > 36) months = 36;
+
+  let promoCode = (code || '').toString().trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+  if (!promoCode) {
+    const p1 = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const p2 = Math.random().toString(36).substring(2, 6).toUpperCase();
+    promoCode = `VIP-${p1}-${p2}`;
+  }
+
+  const promos = loadPromos();
+  if (promos.some((p) => p.code.toUpperCase() === promoCode)) {
+    return res.status(400).json({ error: `Promo code "${promoCode}" already exists.` });
+  }
+
+  const newPromo = {
+    code: promoCode,
+    duration_months: months,
+    created_at: new Date().toISOString(),
+    created_by: req.admin?.username || 'admin',
+    is_claimed: false,
+    claimed_at: null,
+    claimed_by: null,
+  };
+
+  promos.unshift(newPromo);
+  savePromos(promos);
+
+  return res.status(201).json({ success: true, promo: newPromo });
+});
+
+// 3. DELETE / REVOKE PROMO CODE
+app.delete('/api/promos/:code', requireAdmin, (req, res) => {
+  const targetCode = (req.params.code || '').trim().toUpperCase();
+  const promos = loadPromos();
+  const idx = promos.findIndex((p) => p.code.toUpperCase() === targetCode);
+  if (idx === -1) {
+    return res.status(404).json({ error: 'Promo code not found.' });
+  }
+
+  const [removed] = promos.splice(idx, 1);
+  savePromos(promos);
+  return res.status(200).json({ success: true, message: `Promo code ${removed.code} deleted successfully.` });
+});
+
+// ─── Private Promo Code Redemption API (Server-to-Server) ───────────────────
+// Called by MovieFlix backend /api/subscription?action=redeem_promo
+app.post('/api/v1/promo/redeem', verifyAdSecretKey, (req, res) => {
+  const { code, user_id, email, account_id } = req.body || {};
+  const cleanCode = (code || '').toString().trim().toUpperCase();
+
+  if (!cleanCode) {
+    return res.status(400).json({ error: 'Promo code is required.' });
+  }
+
+  const promos = loadPromos();
+  const promo = promos.find((p) => p.code.toUpperCase() === cleanCode);
+
+  if (!promo) {
+    return res.status(404).json({ error: 'Invalid VIP promo code. Please double-check and try again.' });
+  }
+
+  if (promo.is_claimed) {
+    return res.status(400).json({
+      error: 'This VIP promo code has already been claimed and has expired.',
+      claimed_at: promo.claimed_at,
+    });
+  }
+
+  // Mark code claimed (expires immediately)
+  promo.is_claimed = true;
+  promo.claimed_at = new Date().toISOString();
+  promo.claimed_by = {
+    user_id: user_id || null,
+    email: email || null,
+    account_id: account_id || null,
+    claimed_ip: req.headers['x-forwarded-for'] || req.socket?.remoteAddress || null,
+  };
+
+  savePromos(promos);
+
+  return res.status(200).json({
+    success: true,
+    code: promo.code,
+    duration_months: promo.duration_months || 1,
+    claimed_at: promo.claimed_at,
+    message: `Successfully claimed VIP Pro for ${promo.duration_months || 1} month(s)!`,
   });
 });
 
