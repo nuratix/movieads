@@ -425,6 +425,58 @@ export async function fetchMovieAds() {
     </section>
   </main>
 
+  <!-- EDIT AD MODAL -->
+  <div id="editAdModal" class="modal-backdrop hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">Edit Ad Campaign</h3>
+        <button type="button" class="modal-close-btn" onclick="closeEditModal()">&times;</button>
+      </div>
+
+      <form id="editAdForm" class="create-form">
+        <input type="hidden" id="editAdId" name="id">
+
+        <div class="form-group">
+          <label for="editAdName">Campaign Name / Title</label>
+          <input type="text" id="editAdName" name="name" required class="form-input" style="width: 100%;">
+        </div>
+
+        <div class="form-group" style="margin-top: 14px;">
+          <label for="editAdTargetUrl">Destination Target URL</label>
+          <input type="url" id="editAdTargetUrl" name="target_url" required class="form-input" placeholder="https://example.com/promo" style="width: 100%;">
+        </div>
+
+        <div class="form-group" style="margin-top: 14px;">
+          <label for="editAdSkipSeconds">Skip Countdown Seconds (Default: 10s)</label>
+          <input type="number" id="editAdSkipSeconds" name="skip_seconds" min="0" max="60" value="10" class="form-input" style="width: 100%;">
+        </div>
+
+        <div class="form-group" style="margin-top: 14px;">
+          <label for="editAdStatus">Campaign Status</label>
+          <select id="editAdStatus" name="is_active" class="form-input" style="width: 100%; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border-subtle); padding: 10px; border-radius: var(--radius-sm);">
+            <option value="true">Active (Serving)</option>
+            <option value="false">Paused</option>
+          </select>
+        </div>
+
+        <div class="form-group" style="margin-top: 14px;">
+          <label>Replace Media File (Optional — leave blank to keep existing)</label>
+          <input type="file" id="editAdFile" name="media" accept="image/*,video/*" class="form-input" style="width: 100%;">
+          <span class="field-hint" style="display: block; font-size: 11px; color: var(--text-muted); margin-top: 4px;">Supports MP4, WebM videos or JPEG, PNG, WEBP images.</span>
+        </div>
+
+        <div id="editError" class="alert alert-error hidden" style="margin-top: 14px;"></div>
+
+        <div class="form-actions-row" style="margin-top: 24px; display: flex; gap: 12px;">
+          <button type="submit" id="saveAdBtn" class="btn btn-primary btn-lg" style="flex: 1;">
+            <span>Save Changes</span>
+          </button>
+          <button type="button" class="btn btn-secondary btn-lg" onclick="closeEditModal()">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script src="/app.js"></script>
 </body>
 </html>

@@ -104,9 +104,30 @@ document.querySelectorAll('.tab-btn').forEach((btn) => {
 });
 
 // ─── Auth Verification on Launch ─────────────────────────────────────────────
+function getAuthToken() {
+  try {
+    return localStorage.getItem('movieads_token') || '';
+  } catch (_) {
+    return '';
+  }
+}
+
+async function authFetch(url, options = {}) {
+  const token = getAuthToken();
+  const headers = { ...(options.headers || {}) };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return fetch(url, {
+    ...options,
+    headers,
+    credentials: 'include',
+  });
+}
+
 async function checkAuth() {
   try {
-    const res = await fetch('/api/auth/me');
+    const res = await authFetch('/api/auth/me');
     if (res.ok) {
       const data = await res.json();
       if (data.authenticated) {
@@ -155,6 +176,7 @@ if (loginForm) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key, password }),
+        credentials: 'include',
       });
 
       const data = await res.json();
@@ -162,6 +184,12 @@ if (loginForm) {
         loginError.textContent = data.error || 'Authentication failed.';
         loginError.classList.remove('hidden');
         return;
+      }
+
+      if (data.token) {
+        try {
+          localStorage.setItem('movieads_token', data.token);
+        } catch (_) {}
       }
 
       showToast('Login successful! Welcome to MovieAds.');
@@ -180,7 +208,10 @@ if (loginForm) {
 if (logoutBtn) {
   logoutBtn.addEventListener('click', async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' });
+      await authFetch('/api/auth/logout', { method: 'POST' });
+    } catch (_) {}
+    try {
+      localStorage.removeItem('movieads_token');
     } catch (_) {}
     showToast('Signed out successfully');
     showLogin();
@@ -359,7 +390,7 @@ if (createAdForm) {
     submitAdBtn.innerHTML = '<span>Uploading and publishing media...</span>';
 
     try {
-      const res = await fetch('/api/ads', {
+      const res = await authFetch('/api/ads', {
         method: 'POST',
         body: formData,
       });
@@ -390,7 +421,7 @@ if (createAdForm) {
 // ─── Load & Render Ads ───────────────────────────────────────────────────────
 async function loadAds() {
   try {
-    const res = await fetch('/api/ads');
+    const res = await authFetch('/api/ads');
     if (!res.ok) {
       if (res.status === 401) showLogin();
       return;
@@ -432,7 +463,7 @@ function renderDashboard() {
     return `
       <div class="ad-card" data-id="${ad.id}">
         <!-- Media Frame -->
-        <div class="${isShorts ? 'ad-banner-16-9' : 'ad-banner-16-9'}">
+        <div class="ad-banner-16-9">
           ${isVideo ? `
             <video src="${escapeHtml(mediaSource)}" class="ad-banner-img" muted loop playsinline onmouseover="this.play()" onmouseout="this.pause()"></video>
             <div style="position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.7); padding: 2px 6px; border-radius: 4px; font-size: 10px; color: #fff;">🎬 Video</div>
@@ -470,10 +501,13 @@ function renderDashboard() {
           <!-- Actions -->
           <div class="ad-card-actions">
             <button class="btn btn-sm ${ad.is_active ? 'btn-outline' : 'btn-primary'}" onclick="toggleAdStatus('${ad.id}')">
-              ${ad.is_active ? 'Pause Ad' : 'Activate Ad'}
+              ${ad.is_active ? 'Pause' : 'Activate'}
             </button>
             <div style="display: flex; gap: 6px;">
-              <button class="btn btn-outline btn-xs" onclick="copyAdLink('${ad.click_url}')" title="Copy Click URL">
+              <button class="btn btn-outline btn-xs" onclick="openEditModal('${ad.id}')" title="Edit Campaign Details">
+                Edit
+              </button>
+              <button class="btn btn-outline btn-xs" onclick="copyAdLink('${escapeHtml(ad.click_url || '')}')" title="Copy Click URL">
                 Link
               </button>
               <button class="btn btn-outline btn-xs btn-danger" onclick="deleteAd('${ad.id}')" title="Delete Ad">
@@ -487,10 +521,82 @@ function renderDashboard() {
   }).join('');
 }
 
+// ─── Edit Ad Modal Logic ────────────────────────────────────────────────────
+window.openEditModal = function(id) {
+  const ad = currentAds.find((a) => a.id === id);
+  if (!ad) return;
+
+  const modal = document.getElementById('editAdModal');
+  const errorEl = document.getElementById('editError');
+  if (errorEl) errorEl.classList.add('hidden');
+
+  document.getElementById('editAdId').value = ad.id;
+  document.getElementById('editAdName').value = ad.name || '';
+  document.getElementById('editAdTargetUrl').value = ad.target_url || '';
+  document.getElementById('editAdSkipSeconds').value = ad.skip_seconds || 10;
+  document.getElementById('editAdStatus').value = ad.is_active ? 'true' : 'false';
+  document.getElementById('editAdFile').value = '';
+
+  if (modal) modal.classList.remove('hidden');
+};
+
+window.closeEditModal = function() {
+  const modal = document.getElementById('editAdModal');
+  if (modal) modal.classList.add('hidden');
+};
+
+const editAdForm = document.getElementById('editAdForm');
+if (editAdForm) {
+  editAdForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('editAdId').value;
+    const saveBtn = document.getElementById('saveAdBtn');
+    const errorEl = document.getElementById('editError');
+    if (errorEl) errorEl.classList.add('hidden');
+
+    const formData = new FormData(editAdForm);
+    const fileInput = document.getElementById('editAdFile');
+    if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+      formData.delete('media');
+    }
+
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<span>Saving changes...</span>';
+
+    try {
+      const res = await authFetch(`/api/ads/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        if (errorEl) {
+          errorEl.textContent = data.error || 'Failed to update ad campaign.';
+          errorEl.classList.remove('hidden');
+        }
+        return;
+      }
+
+      showToast('Ad campaign updated successfully!');
+      closeEditModal();
+      loadAds();
+    } catch (err) {
+      if (errorEl) {
+        errorEl.textContent = 'Network error saving ad changes.';
+        errorEl.classList.remove('hidden');
+      }
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.innerHTML = '<span>Save Changes</span>';
+    }
+  });
+}
+
 // ─── Ad Card Actions ─────────────────────────────────────────────────────────
 window.toggleAdStatus = async function(id) {
   try {
-    const res = await fetch(`/api/ads/${id}/toggle`, { method: 'PATCH' });
+    const res = await authFetch(`/api/ads/${id}/toggle`, { method: 'PATCH' });
     const data = await res.json();
     if (res.ok) {
       showToast(data.message || 'Status updated');
@@ -508,9 +614,9 @@ window.deleteAd = async function(id) {
     return;
   }
   try {
-    const res = await fetch(`/api/ads/${id}`, { method: 'DELETE' });
+    const res = await authFetch(`/api/ads/${id}`, { method: 'DELETE' });
     if (res.ok) {
-      showToast('Ad campaign deleted');
+      showToast('Ad campaign deleted successfully');
       loadAds();
     } else {
       const data = await res.json();
@@ -522,6 +628,10 @@ window.deleteAd = async function(id) {
 };
 
 window.copyAdLink = function(url) {
+  if (!url) {
+    showToast('No click URL available');
+    return;
+  }
   navigator.clipboard.writeText(url).then(() => {
     showToast('Click URL copied to clipboard!');
   }).catch(() => {
