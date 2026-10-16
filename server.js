@@ -14,11 +14,11 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 
-// ─── Environment & Secrets ───────────────────────────────────────────────────
-const ADMIN_KEY = (process.env.ADMIN_KEY || '2133933919').trim();
-const ADMIN_PASSWORD = (process.env.ADMIN_PASSWORD || '@Junaid0041w').trim();
-const ADS_SECRET_KEY = (process.env.ADS_SECRET_KEY || 'mf_ad_sec_89a31bc09e').trim();
-const JWT_SECRET = process.env.JWT_SECRET || 'movieads_jwt_super_secret_signing_key_2026';
+// ─── Environment & Secrets (Configured via Environment Variables) ─────────
+const ADMIN_KEY = (process.env.ADMIN_KEY || '').trim();
+const ADMIN_PASSWORD = (process.env.ADMIN_PASSWORD || '').trim();
+const ADS_SECRET_KEY = (process.env.ADS_SECRET_KEY || '').trim();
+const JWT_SECRET = (process.env.JWT_SECRET || 'movieads_jwt_sec_sign_key_99x').trim();
 const BASE_URL = (process.env.BASE_URL || '').trim().replace(/\/+$/, '');
 
 // ─── Storage Directories ─────────────────────────────────────────────────────
@@ -111,7 +111,7 @@ const upload = multer({
 });
 
 // ─── Middlewares ─────────────────────────────────────────────────────────────
-app.set('trust proxy', 1);
+app.set('trust proxy', true);
 app.use(cors({
   origin: true,
   credentials: true,
@@ -120,9 +120,213 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// Static file servers
+// Static file servers: uploads & assets
 app.use('/uploads', express.static(UPLOADS_DIR));
+
+// ─── Client IP Helper ────────────────────────────────────────────────────────
+function getClientIp(req) {
+  const cfIp = req.headers['cf-connecting-ip'];
+  if (cfIp && typeof cfIp === 'string') return cfIp.trim();
+  const realIp = req.headers['x-real-ip'];
+  if (realIp && typeof realIp === 'string') return realIp.trim();
+  const fwd = req.headers['x-forwarded-for'];
+  if (fwd && typeof fwd === 'string') return fwd.split(',')[0].trim();
+  return req.socket?.remoteAddress || req.ip || '127.0.0.1';
+}
+
+function isPrivateIp(ip) {
+  if (!ip) return true;
+  return (
+    ip === '127.0.0.1' ||
+    ip === '::1' ||
+    ip === 'localhost' ||
+    ip.startsWith('10.') ||
+    ip.startsWith('192.168.') ||
+    /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(ip) ||
+    ip.startsWith('fc00:') ||
+    ip.startsWith('fe80:')
+  );
+}
+
+// ─── VPN / Proxy Blocking Middleware (Only for Admin Login & Dashboard Pages) ─
+// CRITICAL: Ads endpoints (/api/v1/ads, /uploads/*, /click, /impression) are NEVER blocked.
+const vpnCache = new Map();
+const VPN_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+
+async function detectVpnOrProxy(req) {
+  const ip = getClientIp(req);
+  if (isPrivateIp(ip)) {
+    return { isVpn: false };
+  }
+
+  // 1. Cloudflare Country & Threat Indicators
+  const cfCountry = (req.headers['cf-ipcountry'] || '').toString().trim().toUpperCase();
+  if (cfCountry === 'T1' || cfCountry === 'XX' || cfCountry === 'TOR') {
+    return { isVpn: true, reason: 'Tor / Anonymous Proxy network detected' };
+  }
+  const cfThreat = parseInt(req.headers['cf-threat-score'] || '0', 10);
+  if (cfThreat > 25) {
+    return { isVpn: true, reason: 'High-risk threat / abusive network detected' };
+  }
+
+  // 2. Suspicious Proxy Headers
+  if (req.headers['via'] || req.headers['x-proxyuser-ip']) {
+    return { isVpn: true, reason: 'HTTP Proxy detected in request headers' };
+  }
+
+  // 3. Cache check
+  const cached = vpnCache.get(ip);
+  if (cached && Date.now() < cached.expiresAt) {
+    return { isVpn: cached.isVpn, reason: cached.reason };
+  }
+
+  // 4. IP Intelligence Lookup (with 1.8s timeout)
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 1800);
+    const res = await fetch(`http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,message,proxy,hosting,query`, {
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.status === 'success') {
+        const isVpn = Boolean(data.proxy || data.hosting);
+        const reason = data.proxy
+          ? 'VPN or Proxy network detected'
+          : data.hosting
+          ? 'Datacenter or Hosting IP detected'
+          : '';
+        vpnCache.set(ip, { isVpn, reason, expiresAt: Date.now() + VPN_CACHE_TTL_MS });
+        return { isVpn, reason };
+      }
+    }
+  } catch (_) {
+    // Fail-open on lookup error so network timeouts do not block legitimate users
+  }
+
+  vpnCache.set(ip, { isVpn: false, reason: '', expiresAt: Date.now() + 30 * 60 * 1000 });
+  return { isVpn: false };
+}
+
+async function blockVpnForAdminPages(req, res, next) {
+  // RULE: NEVER block ads or impression / click endpoints!
+  const p = req.path.toLowerCase();
+  if (
+    p.startsWith('/api/v1/') ||
+    p.startsWith('/uploads/') ||
+    /\.(css|js|png|jpg|jpeg|gif|ico|svg|mp4|webm|woff2?)$/i.test(p)
+  ) {
+    return next();
+  }
+
+  try {
+    const check = await detectVpnOrProxy(req);
+    if (check.isVpn) {
+      if (req.path.startsWith('/api/')) {
+        return res.status(403).json({
+          error: 'Access Denied: VPN, Proxy, or Datacenter connections are strictly prohibited for the Admin Dashboard.',
+          blocked: true,
+          reason: check.reason,
+        });
+      }
+
+      return res.status(403).send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Access Restricted - MovieAds</title>
+  <style>
+    body { background: #0a0a0a; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+    .box { max-width: 480px; background: #141414; border: 1px solid #2a2a2a; border-radius: 12px; padding: 32px; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
+    .icon { font-size: 48px; margin-bottom: 16px; color: #e50914; }
+    h1 { font-size: 22px; margin: 0 0 12px; color: #ffffff; }
+    p { font-size: 14px; line-height: 1.6; color: #a3a3a3; margin: 0 0 20px; }
+    .badge { display: inline-block; background: rgba(229, 9, 20, 0.15); color: #ff4d4d; border: 1px solid rgba(229, 9, 20, 0.3); padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; margin-bottom: 16px; }
+    .btn { display: inline-block; background: #262626; color: #fff; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-size: 13px; font-weight: 600; border: 1px solid #404040; cursor: pointer; }
+    .btn:hover { background: #333333; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <div class="icon">&#128737;&#65039;</div>
+    <div class="badge">VPN / Proxy Restricted</div>
+    <h1>Access to Admin Portal Blocked</h1>
+    <p>Access to the MovieAds administrative dashboard is strictly restricted from VPN, proxy, Tor, or datacenter IP addresses for platform security.</p>
+    <p>Please disconnect from your VPN or proxy and refresh this page to access the login portal.</p>
+    <button class="btn" onclick="location.reload()">Retry Connection</button>
+  </div>
+</body>
+</html>`);
+    }
+  } catch (err) {
+    console.warn('[Security] VPN check error:', err?.message);
+  }
+
+  next();
+}
+
+app.use(blockVpnForAdminPages);
 app.use(express.static(path.join(__dirname, 'public')));
+
+// ─── General API Rate Limiting ───────────────────────────────────────────────
+const apiRateLimits = new Map();
+const API_RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const API_RATE_LIMIT_MAX = 120;
+
+function checkApiRateLimit(req, res, next) {
+  const ip = getClientIp(req);
+  const now = Date.now();
+  const windowStart = now - API_RATE_LIMIT_WINDOW_MS;
+  let timestamps = apiRateLimits.get(ip) || [];
+  timestamps = timestamps.filter(t => t > windowStart);
+  if (timestamps.length >= API_RATE_LIMIT_MAX) {
+    return res.status(429).json({
+      error: 'Too Many Requests',
+      message: 'Rate limit exceeded. Please wait a moment before trying again.',
+      retryAfterSeconds: Math.ceil((timestamps[0] + API_RATE_LIMIT_WINDOW_MS - now) / 1000),
+    });
+  }
+  timestamps.push(now);
+  apiRateLimits.set(ip, timestamps);
+  next();
+}
+
+// ─── Admin Login Rate Limiting (3 attempts max -> 3-hour lockout) ─────────────
+const loginAttempts = new Map(); // ip -> { count: number, lockedUntil: number, lastAttempt: number }
+const LOGIN_LOCK_TIME_MS = 3 * 60 * 60 * 1000; // 3 hours
+const MAX_LOGIN_ATTEMPTS = 3;
+
+function getLoginLockStatus(ip) {
+  const record = loginAttempts.get(ip);
+  if (!record) return null;
+  const now = Date.now();
+  if (record.lockedUntil && now < record.lockedUntil) {
+    const remainingMs = record.lockedUntil - now;
+    const remainingHours = Math.floor(remainingMs / (60 * 60 * 1000));
+    const remainingMins = Math.ceil((remainingMs % (60 * 60 * 1000)) / (60 * 1000));
+    const timeStr = remainingHours > 0 ? `${remainingHours}h ${remainingMins}m` : `${remainingMins} minute(s)`;
+    return { locked: true, remainingMs, timeStr, lockedUntil: record.lockedUntil };
+  }
+  if (record.lockedUntil && now >= record.lockedUntil) {
+    loginAttempts.delete(ip);
+  }
+  return null;
+}
+
+// Clean up stale lockout records every 30 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, data] of loginAttempts.entries()) {
+    if (data.lockedUntil && now > data.lockedUntil) {
+      loginAttempts.delete(ip);
+    } else if (!data.lockedUntil && now - data.lastAttempt > 60 * 60 * 1000) {
+      loginAttempts.delete(ip);
+    }
+  }
+}, 30 * 60 * 1000);
 
 function getEffectiveBaseUrl(req) {
   if (BASE_URL) return BASE_URL;
@@ -151,6 +355,13 @@ function requireAdmin(req, res, next) {
 
 // ─── Ad API Key Verification Middleware ──────────────────────────────────────
 function verifyAdSecretKey(req, res, next) {
+  if (!ADS_SECRET_KEY) {
+    return res.status(500).json({
+      error: 'Server Misconfiguration',
+      detail: 'ADS_SECRET_KEY environment variable is not configured on the server.',
+    });
+  }
+
   const provided = (
     req.headers['x-ad-secret-key'] ||
     req.headers['x-app-key'] ||
@@ -200,6 +411,18 @@ function formatAdPayload(a, baseUrl) {
 
 // ─── Auth Endpoints ──────────────────────────────────────────────────────────
 app.post('/api/auth/login', (req, res) => {
+  const clientIp = getClientIp(req);
+  const lockStatus = getLoginLockStatus(clientIp);
+
+  if (lockStatus && lockStatus.locked) {
+    return res.status(429).json({
+      error: `Admin login locked due to 3 consecutive failed attempts. Please try again in ${lockStatus.timeStr}.`,
+      locked: true,
+      remainingMs: lockStatus.remainingMs,
+      lockedUntil: lockStatus.lockedUntil,
+    });
+  }
+
   const { key, password } = req.body || {};
   const cleanKey = String(key || '').trim();
   const cleanPass = String(password || '').trim();
@@ -208,9 +431,37 @@ app.post('/api/auth/login', (req, res) => {
     return res.status(400).json({ error: 'Both Admin Key and Password are required.' });
   }
 
-  if (cleanKey !== ADMIN_KEY || cleanPass !== ADMIN_PASSWORD) {
-    return res.status(401).json({ error: 'Invalid Admin Key or Password.' });
+  if (!ADMIN_KEY || !ADMIN_PASSWORD) {
+    return res.status(500).json({ error: 'Server misconfiguration: ADMIN_KEY or ADMIN_PASSWORD env missing.' });
   }
+
+  if (cleanKey !== ADMIN_KEY || cleanPass !== ADMIN_PASSWORD) {
+    const existing = loginAttempts.get(clientIp) || { count: 0, lockedUntil: 0 };
+    const newCount = existing.count + 1;
+    const now = Date.now();
+
+    if (newCount >= MAX_LOGIN_ATTEMPTS) {
+      const lockedUntil = now + LOGIN_LOCK_TIME_MS;
+      loginAttempts.set(clientIp, { count: newCount, lockedUntil, lastAttempt: now });
+      return res.status(429).json({
+        error: 'Too many failed login attempts (3/3). Admin login is now locked for 3 hours.',
+        locked: true,
+        remainingMs: LOGIN_LOCK_TIME_MS,
+        lockedUntil,
+      });
+    }
+
+    loginAttempts.set(clientIp, { count: newCount, lockedUntil: 0, lastAttempt: now });
+    const remaining = MAX_LOGIN_ATTEMPTS - newCount;
+    return res.status(401).json({
+      error: `Invalid Admin Key or Password. ${remaining} attempt${remaining > 1 ? 's' : ''} remaining before a 3-hour lockout.`,
+      attemptsRemaining: remaining,
+      locked: false,
+    });
+  }
+
+  // Authentication succeeded: clear failed attempts for this IP
+  loginAttempts.delete(clientIp);
 
   const token = jwt.sign(
     { role: 'admin', key: cleanKey, iat: Math.floor(Date.now() / 1000) },
@@ -229,6 +480,15 @@ app.post('/api/auth/login', (req, res) => {
     success: true,
     message: 'Authenticated successfully.',
     token,
+  });
+});
+
+app.get('/api/admin/config', requireAdmin, (req, res) => {
+  return res.status(200).json({
+    success: true,
+    ads_secret_key: ADS_SECRET_KEY,
+    admin_key: ADMIN_KEY,
+    base_url: getEffectiveBaseUrl(req),
   });
 });
 
@@ -447,7 +707,7 @@ app.delete('/api/ads/:id', requireAdmin, (req, res) => {
 
 // ─── Public Ad Serving API (Protected by ADS_SECRET_KEY) ─────────────────────
 // 1. GET ALL ACTIVE ADS (Optional filters: aspect_ratio, placement, media_type)
-app.get('/api/v1/ads', verifyAdSecretKey, (req, res) => {
+app.get('/api/v1/ads', checkApiRateLimit, verifyAdSecretKey, (req, res) => {
   const ads = loadAds();
   const baseUrl = getEffectiveBaseUrl(req);
   const { aspect_ratio, format, placement, media_type } = req.query || {};
@@ -492,7 +752,7 @@ app.get('/api/v1/ads', verifyAdSecretKey, (req, res) => {
 });
 
 // 2. GET RANDOM ACTIVE AD (Optional filters: aspect_ratio, placement, media_type, exclude_id)
-app.get('/api/v1/ads/random', verifyAdSecretKey, (req, res) => {
+app.get('/api/v1/ads/random', checkApiRateLimit, verifyAdSecretKey, (req, res) => {
   const ads = loadAds();
   const { aspect_ratio, format, placement, media_type, exclude_id, last_id, exclude } = req.query || {};
 

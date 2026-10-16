@@ -389,7 +389,7 @@
                 <span>cURL Request Example</span>
                 <button class="btn btn-copy btn-xs" onclick="copySnippet('curlExample')">Copy</button>
               </div>
-              <pre id="curlExample"><code>curl -H "X-Ad-Secret-Key: mf_ad_sec_89a31bc09e" \
+              <pre id="curlExample"><code>curl -H "X-Ad-Secret-Key: &lt;YOUR_ADS_SECRET_KEY&gt;" \
   https://ads.wallpaperdomain.xyz/api/v1/ads</code></pre>
             </div>
 
@@ -423,7 +423,7 @@
 export async function fetchMovieAds() {
   const res = await fetch('https://ads.wallpaperdomain.xyz/api/v1/ads', {
     headers: {
-      'X-Ad-Secret-Key': process.env.ADS_SECRET_KEY || 'mf_ad_sec_89a31bc09e',
+      'X-Ad-Secret-Key': process.env.ADS_SECRET_KEY,
     },
   });
   if (!res.ok) return [];

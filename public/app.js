@@ -149,6 +149,27 @@ function showDashboard() {
   if (loginSection) loginSection.classList.add('hidden');
   if (dashboardSection) dashboardSection.classList.remove('hidden');
   loadAds();
+  loadAdminConfig();
+}
+
+async function loadAdminConfig() {
+  try {
+    const res = await authFetch('/api/admin/config');
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.ads_secret_key) {
+        window.activeAdsSecretKey = data.ads_secret_key;
+        const curlSnippet = document.getElementById('curlExample');
+        if (curlSnippet) {
+          curlSnippet.innerHTML = `<code>curl -H "X-Ad-Secret-Key: ${data.ads_secret_key}" \\\n  https://ads.wallpaperdomain.xyz/api/v1/ads</code>`;
+        }
+        const rnSnippet = document.getElementById('rnExample');
+        if (rnSnippet) {
+          rnSnippet.innerHTML = `<code>// Fetch active 16:9 ads in Movieflix\nexport async function fetchMovieAds() {\n  const res = await fetch('https://ads.wallpaperdomain.xyz/api/v1/ads', {\n    headers: {\n      'X-Ad-Secret-Key': process.env.ADS_SECRET_KEY || '${data.ads_secret_key}',\n    },\n  });\n  if (!res.ok) return [];\n  const data = await res.json();\n  return data.ads || [];\n}</code>`;
+        }
+      }
+    }
+  } catch (_) {}
 }
 
 function showLogin() {
@@ -187,6 +208,11 @@ if (loginForm) {
       if (!res.ok) {
         loginError.textContent = data.error || 'Authentication failed.';
         loginError.classList.remove('hidden');
+        if (data.locked) {
+          submitBtn.disabled = true;
+          submitBtn.innerHTML = '<span>🔒 Login Locked (3 Hours)</span>';
+          return;
+        }
         return;
       }
 
@@ -202,8 +228,10 @@ if (loginForm) {
       loginError.textContent = 'Network error connecting to auth server.';
       loginError.classList.remove('hidden');
     } finally {
-      submitBtn.disabled = false;
-      submitBtn.innerHTML = '<span>Sign In to Dashboard</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>';
+      if (!submitBtn.disabled || !submitBtn.innerHTML.includes('Locked')) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<span>Sign In to Dashboard</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>';
+      }
     }
   });
 }
