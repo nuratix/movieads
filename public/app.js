@@ -63,7 +63,7 @@ window.selectFormat = function(ratio, defaultPlacement) {
   if (dropTitle) dropTitle.textContent = 'Tap to browse or drop 16:9 video or poster';
   if (adPlacement) adPlacement.value = 'player';
   const skipSelect = document.getElementById('adSkipSeconds');
-  if (skipSelect) skipSelect.value = '10';
+  if (skipSelect) skipSelect.value = '30';
 };
 
 // ─── Password Visibility Toggle ──────────────────────────────────────────────
@@ -352,7 +352,7 @@ if (createAdForm) {
     const isActive = document.getElementById('adIsActive').checked;
     const placement = adPlacement ? adPlacement.value : 'player';
     const aspectRatio = adAspectRatio ? adAspectRatio.value : '16:9';
-    const skipSeconds = document.getElementById('adSkipSeconds')?.value || (aspectRatio === '9:16' ? 5 : 10);
+    const skipSeconds = Math.max(30, Number(document.getElementById('adSkipSeconds')?.value || 30));
     const file = mediaFileInput.files[0];
     const remoteUrl = mediaUrlInput.value.trim();
 
@@ -537,7 +537,7 @@ window.openEditModal = function(id) {
   document.getElementById('editAdId').value = ad.id;
   document.getElementById('editAdName').value = ad.name || '';
   document.getElementById('editAdTargetUrl').value = ad.target_url || '';
-  document.getElementById('editAdSkipSeconds').value = ad.skip_seconds || 10;
+  document.getElementById('editAdSkipSeconds').value = Math.max(30, Number(ad.skip_seconds) || 30);
   document.getElementById('editAdStatus').value = ad.is_active ? 'true' : 'false';
   document.getElementById('editAdFile').value = '';
 

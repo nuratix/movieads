@@ -189,7 +189,7 @@ function formatAdPayload(a, baseUrl) {
     click_url: `${baseUrl}/api/v1/click/${a.id}`,
     impression_url: `${baseUrl}/api/v1/impression/${a.id}`,
     placement: a.placement || 'all',
-    skip_seconds: a.skip_seconds || 10,
+    skip_seconds: Math.max(30, Number(a.skip_seconds) || 30),
     created_at: a.created_at,
     updated_at: a.updated_at,
     is_active: a.is_active,
@@ -321,7 +321,7 @@ app.post('/api/ads', requireAdmin, upload.any(), (req, res) => {
       media_type: detectedType,
       aspect_ratio: ratio,
       placement: finalPlacement,
-      skip_seconds: Number(skip_seconds) || 10,
+      skip_seconds: Math.max(30, Number(skip_seconds) || 30),
       is_active: is_active === 'true' || is_active === true || is_active === 1 || is_active === '1',
       impressions: 0,
       clicks: 0,
@@ -406,7 +406,7 @@ app.put('/api/ads/:id', requireAdmin, upload.any(), (req, res) => {
   if (media_type) ad.media_type = media_type;
   if (is_active !== undefined) ad.is_active = Boolean(is_active);
   if (placement) ad.placement = String(placement).trim();
-  if (skip_seconds) ad.skip_seconds = Number(skip_seconds);
+  if (skip_seconds !== undefined) ad.skip_seconds = Math.max(30, Number(skip_seconds) || 30);
   ad.updated_at = new Date().toISOString();
 
   saveAds(ads);

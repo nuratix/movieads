@@ -342,10 +342,10 @@
               <div class="placement-select-wrap">
                 <label for="adSkipSeconds">Skip Countdown (sec):</label>
                 <select id="adSkipSeconds" name="skip_seconds" class="select-input">
-                  <option value="10">10 Seconds (Standard Player)</option>
-                  <option value="5">5 Seconds (Midroll)</option>
-                  <option value="15">15 Seconds</option>
-                  <option value="0">Instant Skip</option>
+                  <option value="30" selected>30 Seconds (Minimum Standard)</option>
+                  <option value="45">45 Seconds</option>
+                  <option value="60">60 Seconds</option>
+                  <option value="90">90 Seconds</option>
                 </select>
               </div>
             </div>
@@ -558,8 +558,8 @@ export async function fetchMovieAds() {
         </div>
 
         <div class="form-group" style="margin-top: 14px;">
-          <label for="editAdSkipSeconds">Skip Countdown Seconds (Default: 10s)</label>
-          <input type="number" id="editAdSkipSeconds" name="skip_seconds" min="0" max="60" value="10" class="form-input" style="width: 100%;">
+          <label for="editAdSkipSeconds">Skip Countdown Seconds (Minimum: 30s)</label>
+          <input type="number" id="editAdSkipSeconds" name="skip_seconds" min="30" max="180" value="30" class="form-input" style="width: 100%;">
         </div>
 
         <div class="form-group" style="margin-top: 14px;">
